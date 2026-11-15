@@ -52,6 +52,14 @@ jobs:
             } > "$HOME/.config/godot/$name"
           done
 
+      - name: Convert Roach.blend to glb
+        run: |
+          sudo apt-get update -qq || true
+          sudo apt-get install -y -qq blender || true
+          mkdir -p assets/enemies
+          blender -b tools/Roach.blend --python tools/export_roach.py || true
+          ls -la assets/enemies || true
+
       - name: Import project
         run: godot --headless --path . --import || true
 

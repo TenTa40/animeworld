@@ -138,6 +138,8 @@ func _gen(ci: int, cx: int, cz: int) -> Array:
 		var h: float = world.height(x, z)
 		if h < float(cat["hmin"]) or h > float(cat["hmax"]):
 			continue
+		if ci != 7 and world.road_weight(x, z, h) > 0.2:
+			continue
 		var nrm: Vector3 = Vector3(world.height(x - 1.0, z) - world.height(x + 1.0, z), 2.0, world.height(x, z - 1.0) - world.height(x, z + 1.0)).normalized()
 		if nrm.y < min_cos:
 			continue

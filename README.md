@@ -10,3 +10,7 @@
 اعتبارها: مدل کاراکتر Kenney (CC0)، آیتم‌ها از Artjom Shebunin (ذکر نام لازم).
 
 - درخت، بوته، چمن، گل و سنگ: «Stylized Nature MegaKit» از Quaternius (CC0) توی `assets/nature/`. بافت‌ها برای موبایل کوچیک شدن و normal map ها حذف شدن.
+
+- آسمون: Kenney Skyboxes (CC0) توی `assets/sky/`.
+- زمین: `assets/ground/grass.jpg` (از کارت چمنی که فرستادی ساخته شده) و `stones.jpg` (بافت سنگ‌فرش، لایسنسش رو چک کن).
+- دشمن سوسک: `tools/Roach.blend` توی CI با Blender به `assets/enemies/roach.glb` تبدیل می‌شه (اگه تبدیل نشد، زامبی جاش میاد). لایسنس مدل رو چک کن.

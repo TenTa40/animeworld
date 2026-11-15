@@ -54,3 +54,29 @@ static func character(parent: Node3D, skin: String, height: float, tint: Color) 
 	var mats: Array = apply_outline(w, 0.03, base)
 	var ap: AnimationPlayer = UT.play_first_anim(w)
 	return {"model": w, "anim": ap, "mats": mats}
+
+# Outline for a model that keeps its own materials. Surfaces without a texture
+# get a toon colour (fallback). Returns every material that can flash.
+static func outline_existing(root: Node3D, thickness_world: float, fallback: Color) -> Array:
+	var out: Array = []
+	for n in root.find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = n as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		var sc: float = mi.global_transform.basis.get_scale().x
+		if sc < 0.0001:
+			sc = 1.0
+		for i in range(mi.mesh.get_surface_count()):
+			var mat: Material = mi.get_active_material(i)
+			var bm: BaseMaterial3D = mat as BaseMaterial3D
+			if bm != null and bm.albedo_texture != null:
+				var d: BaseMaterial3D = bm.duplicate() as BaseMaterial3D
+				d.next_pass = outline(thickness_world / sc)
+				mi.set_surface_override_material(i, d)
+				out.append(d)
+			else:
+				var t: ShaderMaterial = mat(fallback)
+				t.next_pass = outline(thickness_world / sc)
+				mi.set_surface_override_material(i, t)
+				out.append(t)
+	return out

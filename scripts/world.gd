@@ -120,7 +120,7 @@ func _build_terrain() -> void:
 	var mesh: ArrayMesh = st.commit()
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
-	mi.material_override = TOON.mat(Color(1, 1, 1), null, true)
+	mi.material_override = _terrain_material()
 	add_child(mi)
 	var body := StaticBody3D.new()
 	body.collision_layer = 1
@@ -128,6 +128,58 @@ func _build_terrain() -> void:
 	cs.shape = mesh.create_trimesh_shape()
 	body.add_child(cs)
 	add_child(body)
+
+func _tex_mip(path: String) -> Texture2D:
+	if not ResourceLoader.exists(path):
+		return null
+	var t: Texture2D = load(path) as Texture2D
+	if t == null:
+		return null
+	var img: Image = t.get_image()
+	if img == null:
+		return t
+	if img.is_compressed():
+		img.decompress()
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
+
+# winding dirt/stone road across the island
+func road_weight(x: float, z: float, h: float) -> float:
+	if h < 1.0:
+		return 0.0
+	var cz: float = 14.0 * sin(x * 0.04) + 6.0 * sin(x * 0.11 + 1.0)
+	var sl: float = 14.0 * 0.04 * cos(x * 0.04) + 6.0 * 0.11 * cos(x * 0.11 + 1.0)
+	var d: float = absf(z - cz) / sqrt(1.0 + sl * sl)
+	d += noise.get_noise_2d(x * 0.5 + 300.0, z * 0.5) * 1.0
+	return 1.0 - smoothstep(1.6, 2.6, d)
+
+func _build_splat() -> ImageTexture:
+	var n: int = 256
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	for j in range(n):
+		for i in range(n):
+			var x: float = -HALF + (float(i) + 0.5) / float(n) * HALF * 2.0
+			var z: float = -HALF + (float(j) + 0.5) / float(n) * HALF * 2.0
+			var h: float = height(x, z)
+			var road: float = road_weight(x, z, h)
+			var rock: float = smoothstep(9.0, 11.0, h)
+			var sand: float = 1.0 - smoothstep(0.6, 1.5, h)
+			var fo: float = clampf((forest(x, z) - 0.45) * 1.6, 0.0, 1.0)
+			img.set_pixel(i, j, Color(road, rock, sand, fo))
+	return ImageTexture.create_from_image(img)
+
+func _terrain_material() -> Material:
+	var g: Texture2D = _tex_mip("res://assets/ground/grass.jpg")
+	var st: Texture2D = _tex_mip("res://assets/ground/stones.jpg")
+	if g == null or st == null:
+		return TOON.mat(Color(1, 1, 1), null, true)
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/terrain.gdshader") as Shader
+	m.set_shader_parameter("grass_tex", g)
+	m.set_shader_parameter("stone_tex", st)
+	m.set_shader_parameter("splat_tex", _build_splat())
+	m.set_shader_parameter("half_size", HALF)
+	return m
 
 func _build_water() -> void:
 	var mi := MeshInstance3D.new()
@@ -208,6 +260,10 @@ func _make_environment() -> void:
 	sky_m.ground_bottom_color = Color(0.55, 0.72, 0.9)
 	var sky := Sky.new()
 	sky.sky_material = sky_m
+	if ResourceLoader.exists("res://assets/sky/day.jpg"):
+		var pm := PanoramaSkyMaterial.new()
+		pm.panorama = load("res://assets/sky/day.jpg") as Texture2D
+		sky.sky_material = pm
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
@@ -215,7 +271,7 @@ func _make_environment() -> void:
 	env.ambient_light_color = Color(0.55, 0.6, 0.9)
 	env.ambient_light_energy = 0.75
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.8, 0.9, 1.0)
+	env.fog_light_color = Color(0.72, 0.84, 1.0)
 	env.fog_density = 0.011
 	var we := WorldEnvironment.new()
 	we.environment = env
