@@ -81,7 +81,11 @@ func forest(x: float, z: float) -> float:
 
 func _terrain_color(h: float, x: float, z: float) -> Color:
 	var t: float = noise.get_noise_2d(x * 3.1 + 50.0, z * 3.1) * 0.5 + 0.5
-	var col: Color = Color(0.42, 0.78, 0.26).lerp(Color(0.66, 0.9, 0.3), t)
+	var col: Color = Color(0.30, 0.66, 0.22).lerp(Color(0.68, 0.90, 0.32), t)
+	var fo: float = clampf((forest(x, z) - 0.45) * 1.6, 0.0, 1.0)
+	col = col.lerp(Color(0.16, 0.45, 0.20), fo)
+	var dn: float = noise.get_noise_2d(x * 2.0 + 200.0, z * 2.0)
+	col = col.lerp(Color(0.74, 0.60, 0.36), smoothstep(0.30, 0.48, dn) * 0.85)
 	var sand: float = 1.0 - smoothstep(0.6, 1.5, h)
 	col = col.lerp(Color(0.93, 0.85, 0.58), sand)
 	var rock: float = smoothstep(9.0, 11.0, h)
@@ -212,7 +216,7 @@ func _make_environment() -> void:
 	env.ambient_light_energy = 0.75
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.8, 0.9, 1.0)
-	env.fog_density = 0.004
+	env.fog_density = 0.011
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
@@ -220,7 +224,7 @@ func _make_environment() -> void:
 	_sun.rotation_degrees = Vector3(-48.0, -35.0, 0.0)
 	_sun.light_energy = 1.25
 	_sun.light_color = Color(1.0, 0.96, 0.88)
-	_sun.shadow_enabled = true
+	_sun.shadow_enabled = not OS.has_feature("mobile")
 	_sun.directional_shadow_max_distance = 70.0
 	add_child(_sun)
 
