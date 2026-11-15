@@ -8,3 +8,5 @@
 - بیلد APK: هر push روی `main` توی GitHub Actions اجرا می‌شه (`.github/workflows/build-android.yml`).
 
 اعتبارها: مدل کاراکتر Kenney (CC0)، آیتم‌ها از Artjom Shebunin (ذکر نام لازم).
+
+- درخت، بوته، چمن، گل و سنگ: «Stylized Nature MegaKit» از Quaternius (CC0) توی `assets/nature/`. بافت‌ها برای موبایل کوچیک شدن و normal map ها حذف شدن.

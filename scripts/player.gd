@@ -23,7 +23,7 @@ var _cam_dist: float = 5.5
 func _ready() -> void:
 	add_to_group("player")
 	collision_layer = 2
-	collision_mask = 1
+	collision_mask = 9
 	floor_snap_length = 0.7
 	floor_max_angle = deg_to_rad(60.0)
 	var cs := CollisionShape3D.new()

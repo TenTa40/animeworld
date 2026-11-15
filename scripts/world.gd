@@ -7,6 +7,7 @@ const PLAYER = preload("res://scripts/player.gd")
 const ENEMY = preload("res://scripts/enemy.gd")
 const HUD = preload("res://scripts/hud.gd")
 const PICKUP = preload("res://scripts/pickup.gd")
+const NATURE = preload("res://scripts/nature.gd")
 
 const RADIUS := 95.0
 const HALF := 96.0
@@ -15,6 +16,8 @@ const CELLS_TOTAL := 10
 const MAX_ZOMBIES := 7
 
 var noise := FastNoiseLite.new()
+var forest_noise := FastNoiseLite.new()
+var nature = null
 var hud = null
 var player = null
 var collected: int = 0
@@ -29,10 +32,18 @@ func _ready() -> void:
 	noise.frequency = 0.02
 	noise.fractal_octaves = 3
 	noise.seed = 7
+	forest_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	forest_noise.frequency = 0.014
+	forest_noise.seed = 99
 	_make_environment()
 	_build_terrain()
 	_build_water()
-	_build_trees()
+	nature = NATURE.new()
+	add_child(nature)
+	if not nature.setup(self):
+		nature.queue_free()
+		nature = null
+		_build_trees()
 	hud = HUD.new()
 	add_child(hud)
 	player = PLAYER.new()
@@ -64,9 +75,13 @@ func height(x: float, z: float) -> float:
 	h -= smoothstep(RADIUS * 0.5, RADIUS, d) * 16.0
 	return h
 
+# 0..1, high = dense forest
+func forest(x: float, z: float) -> float:
+	return forest_noise.get_noise_2d(x, z) * 0.5 + 0.5
+
 func _terrain_color(h: float, x: float, z: float) -> Color:
 	var t: float = noise.get_noise_2d(x * 3.1 + 50.0, z * 3.1) * 0.5 + 0.5
-	var col: Color = Color(0.36, 0.72, 0.28).lerp(Color(0.55, 0.84, 0.32), t)
+	var col: Color = Color(0.42, 0.78, 0.26).lerp(Color(0.66, 0.9, 0.3), t)
 	var sand: float = 1.0 - smoothstep(0.6, 1.5, h)
 	col = col.lerp(Color(0.93, 0.85, 0.58), sand)
 	var rock: float = smoothstep(9.0, 11.0, h)
@@ -129,6 +144,8 @@ func _valid_spot(min_d: float, max_d: float) -> Vector3:
 		var z: float = sin(ang) * r
 		var h: float = height(x, z)
 		if h > 1.8 and h < 9.5:
+			if nature != null and nature.near_tree(Vector3(x, h, z), 2.2):
+				continue
 			return Vector3(x, h, z)
 	return Vector3(0, height(0, 0), 0) + Vector3(3, 0, 3)
 

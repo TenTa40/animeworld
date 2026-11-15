@@ -17,7 +17,7 @@ var _kb: Vector3 = Vector3.ZERO
 func _ready() -> void:
 	add_to_group("enemy")
 	collision_layer = 4
-	collision_mask = 1
+	collision_mask = 9
 	floor_snap_length = 0.7
 	var cs := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
