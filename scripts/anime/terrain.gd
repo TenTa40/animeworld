@@ -3,8 +3,9 @@ extends Node3D
 # Heights are generated in small time-sliced steps so walking never hitches.
 
 const GEN = preload("res://scripts/anime/worldgen.gd")
+const TOON = preload("res://scripts/anime/toon.gd")
 const CS := 64.0
-const THRESH := [1.6, 3.3, 6.6, 10.6]    # chunk distance limits for LOD 0..3
+const THRESH := [1.6, 3.6, 7.5, 12.0, 19.0]    # chunk distance limits for LOD 0..4 (cells 2/4/8/16/32 m)
 
 class Job extends RefCounted:
 	var key: Vector2i = Vector2i.ZERO
@@ -29,12 +30,15 @@ var mat: ShaderMaterial = null
 var water_mat: ShaderMaterial = null
 var follow: Node3D = null
 var budget_us: int = 3500
+var dist_scale: float = 1.0
 
 var _chunks: Dictionary = {}
 var _queue: Array = []
 var _job: Job = null
 var _center: Vector3 = Vector3.ZERO
 var _upd_t: float = 0.0
+var _tree_mesh: CylinderMesh = null
+var _tree_mat: ShaderMaterial = null
 
 # ------------------------------------------------------------ public
 func sample(x: float, z: float) -> float:
@@ -85,10 +89,9 @@ func update(center: Vector3) -> void:
 	var cpos: Vector2 = Vector2(center.x, center.z)
 	var wanted: Dictionary = {}
 	var newq: Array = []
-	for dz in range(-11, 12):
-		for dx in range(-11, 12):
-			var cx: int = ccx + dx
-			var cz: int = ccz + dz
+	var lim: int = int(ceil((gen.R + 150.0) / CS))
+	for cz in range(maxi(ccz - 19, -lim), mini(ccz + 19, lim - 1) + 1):
+		for cx in range(maxi(ccx - 19, -lim), mini(ccx + 19, lim - 1) + 1):
 			var cc: Vector2 = Vector2((float(cx) + 0.5) * CS, (float(cz) + 0.5) * CS)
 			if cc.length() > gen.R + 150.0:
 				continue
@@ -122,11 +125,11 @@ func update(center: Vector3) -> void:
 func _lod_for(d: float, cur: int) -> int:
 	var lod: int = -1
 	for i in range(THRESH.size()):
-		if d <= float(THRESH[i]):
+		if d <= float(THRESH[i]) * dist_scale:
 			lod = i
 			break
 	if lod >= 0 and cur >= 0 and absi(cur - lod) == 1:
-		var b: float = float(THRESH[mini(cur, lod)])
+		var b: float = float(THRESH[mini(cur, lod)]) * dist_scale
 		if absf(d - b) < 0.35:
 			lod = cur
 	return lod
@@ -277,7 +280,7 @@ func _finalize(j: Job) -> void:
 	for jj in range(V - 2, 0, -1):
 		border.append(jj * V)
 	var base: int = V * V
-	var depth: float = 4.0 + 5.0 * float(j.s)
+	var depth: float = minf(4.0 + 3.0 * float(j.s), 40.0)
 	for b in border:
 		var bi: int = int(b)
 		j.verts.append(j.verts[bi] - Vector3(0.0, depth, 0.0))
@@ -311,6 +314,11 @@ func _finalize(j: Job) -> void:
 	mi.position = origin
 	add_child(mi)
 	rec["mi"] = mi
+	if j.lod >= 1:
+		var ft: MultiMeshInstance3D = _far_trees(j, origin)
+		if ft != null:
+			add_child(ft)
+			rec["ft"] = ft
 	_set_record(j.key, rec)
 
 func _set_record(key: Vector2i, rec: Dictionary) -> void:
@@ -322,9 +330,93 @@ func _free_chunk(key: Vector2i) -> void:
 	if not _chunks.has(key):
 		return
 	var rec: Dictionary = _chunks[key]
-	for nm in ["mi", "body", "wi"]:
+	for nm in ["mi", "body", "wi", "ft"]:
 		if rec.has(nm):
 			var n: Node = rec[nm] as Node
 			if n != null and is_instance_valid(n):
 				n.queue_free()
 	_chunks.erase(key)
+
+# ------------------------------------------------------------ cheap distant forests
+func _hbil(j: Job, lx: float, lz: float) -> float:
+	var step: float = 2.0 * float(j.s)
+	var u: float = clampf(lx / step, 0.0, float(j.V - 1) - 0.001) + 1.0
+	var v: float = clampf(lz / step, 0.0, float(j.V - 1) - 0.001) + 1.0
+	var i0: int = int(floor(u))
+	var j0: int = int(floor(v))
+	var fu: float = u - float(i0)
+	var fv: float = v - float(j0)
+	var h00: float = j.hg[j0 * j.P + i0]
+	var h10: float = j.hg[j0 * j.P + i0 + 1]
+	var h01: float = j.hg[(j0 + 1) * j.P + i0]
+	var h11: float = j.hg[(j0 + 1) * j.P + i0 + 1]
+	return lerpf(lerpf(h00, h10, fu), lerpf(h01, h11, fu), fv)
+
+func _tree_resources() -> void:
+	if _tree_mesh != null:
+		return
+	_tree_mesh = CylinderMesh.new()
+	_tree_mesh.top_radius = 0.0
+	_tree_mesh.bottom_radius = 1.7
+	_tree_mesh.height = 6.5
+	_tree_mesh.radial_segments = 6
+	_tree_mesh.rings = 1
+	_tree_mesh.cap_bottom = false
+	_tree_mat = TOON.mat(Color(1, 1, 1), null, true, Color(0, 0, 0), 0.0, 0.0, 0.15)
+	_tree_mesh.material = _tree_mat
+
+func _far_trees(j: Job, origin: Vector3) -> MultiMeshInstance3D:
+	var counts: Array = [10, 8, 6, 4]
+	var n: int = int(counts[mini(j.lod - 1, 3)])
+	var rng := RandomNumberGenerator.new()
+	rng.seed = (j.cx * 73856093) ^ (j.cz * 19349663) ^ 7771
+	var cell: float = CS / float(n)
+	var xfs: Array = []
+	var cols: Array = []
+	for gz in range(n):
+		for gx in range(n):
+			var lx: float = (float(gx) + rng.randf()) * cell
+			var lz: float = (float(gz) + rng.randf()) * cell
+			var x: float = origin.x + lx
+			var z: float = origin.z + lz
+			var roll: float = rng.randf()
+			var w: Vector4 = gen.masks(x, z)
+			var gv: float = gen.grove(x, z) * w.x
+			var p: float = w.y * 0.95 + w.w * 0.6 + w.x * (0.08 + 0.9 * gv)
+			p *= smoothstep(0.28, 0.55, gen.forest(x, z)) * 0.8 + 0.2
+			if roll > p:
+				continue
+			var h: float = _hbil(j, lx, lz)
+			if h < 1.8 or h > 56.0:
+				continue
+			if absf(_hbil(j, minf(lx + 3.0, CS), lz) - h) > 3.6:
+				continue
+			var sc: float = (1.0 + 0.45 * float(j.lod)) * rng.randf_range(0.85, 1.25)
+			var b: Basis = Basis.IDENTITY.scaled(Vector3(sc, sc, sc))
+			xfs.append(Transform3D(b, Vector3(lx, h + 3.0 * sc - 0.3, lz)))
+			var v: float = rng.randf_range(0.85, 1.15)
+			var c: Color = Color(0.13, 0.38, 0.20)
+			if gv > 0.5:
+				c = Color(0.95, 0.64, 0.80)
+			elif w.w > 0.5:
+				c = Color(0.15, 0.36, 0.34)
+			elif w.x > 0.5:
+				c = Color(0.30, 0.60, 0.24)
+			cols.append(Color(c.r * v, c.g * v, c.b * v, 1.0).srgb_to_linear())
+	if xfs.is_empty():
+		return null
+	_tree_resources()
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = _tree_mesh
+	mm.instance_count = xfs.size()
+	for i in range(xfs.size()):
+		mm.set_instance_transform(i, xfs[i] as Transform3D)
+		mm.set_instance_color(i, cols[i] as Color)
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mmi.position = origin
+	mmi.visibility_range_begin = 72.0
+	return mmi

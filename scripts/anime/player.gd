@@ -72,7 +72,7 @@ func _ready() -> void:
 	_cam.position = Vector3(0.0, 0.0, _cam_dist)
 	_cam.fov = 46.0
 	_cam.near = 0.12
-	_cam.far = 900.0
+	_cam.far = 1700.0
 	_rig.add_child(_cam)
 	_cam.current = true
 

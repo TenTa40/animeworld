@@ -235,7 +235,7 @@ func _make_environment() -> void:
 	_env.ambient_light_energy = 0.75
 	_env.fog_enabled = true
 	_env.fog_light_color = Color(0.72, 0.84, 1.0)
-	_env.fog_density = 0.0032
+	_env.fog_density = 0.0016
 	_env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	var we := WorldEnvironment.new()
 	we.environment = _env
@@ -781,5 +781,16 @@ func _apply_settings() -> void:
 		else:
 			nature.Q = 1.0
 			nature.DENSITY = 1.0
+	if terrain != null:
+		if SET.quality == 0:
+			terrain.dist_scale = 0.55
+		elif SET.quality == 1:
+			terrain.dist_scale = 0.8
+		else:
+			terrain.dist_scale = 1.0
+		if player != null:
+			terrain.update(player.global_position)
+		else:
+			terrain.update(Vector3.ZERO)
 	if audio != null:
 		audio.apply_volumes()

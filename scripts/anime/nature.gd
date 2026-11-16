@@ -10,8 +10,8 @@ var DENSITY: float = 1.0
 
 # d = instances per m2, r = build radius (m), bw = density per biome [plains, forest, desert, mountain]
 const CATS := [
-	{"names": ["CommonTree_5", "CommonTree_3", "CommonTree_4", "CommonTree_1"], "d": 0.010, "r": 80.0, "smin": 0.9, "smax": 1.5, "hmin": 1.8, "hmax": 42.0, "slope": 30.0, "forest": true, "collide": true, "rmin": 9.0, "bw": [0.35, 1.2, 0.0, 0.08], "grove": 3.0},
-	{"names": ["Pine_5", "Pine_4"], "d": 0.010, "r": 80.0, "smin": 0.9, "smax": 1.6, "hmin": 1.8, "hmax": 58.0, "slope": 34.0, "forest": true, "collide": true, "rmin": 9.0, "bw": [0.05, 0.7, 0.0, 0.9]},
+	{"names": ["CommonTree_5", "CommonTree_3", "CommonTree_4", "CommonTree_1"], "d": 0.010, "r": 62.0, "smin": 0.9, "smax": 1.5, "hmin": 1.8, "hmax": 42.0, "slope": 30.0, "forest": true, "collide": true, "rmin": 9.0, "bw": [0.35, 1.2, 0.0, 0.08], "grove": 3.0},
+	{"names": ["Pine_5", "Pine_4"], "d": 0.010, "r": 62.0, "smin": 0.9, "smax": 1.6, "hmin": 1.8, "hmax": 58.0, "slope": 34.0, "forest": true, "collide": true, "rmin": 9.0, "bw": [0.05, 0.7, 0.0, 0.9]},
 	{"names": ["Bush_Common", "Bush_Common_Flowers"], "d": 0.008, "r": 60.0, "smin": 0.8, "smax": 1.5, "hmin": 1.6, "hmax": 45.0, "slope": 35.0, "forest": true, "rmin": 6.0, "bw": [0.8, 1.0, 0.2, 0.15]},
 	{"names": ["Rock_Medium_1", "Rock_Medium_2", "Rock_Medium_3"], "d": 0.0035, "r": 80.0, "smin": 0.7, "smax": 1.8, "hmin": 0.8, "hmax": 200.0, "slope": 70.0, "collide": true, "rmin": 10.0, "bw": [0.4, 0.5, 1.4, 2.2]},
 	{"names": ["Grass_Common_Short", "Grass_Common_Short", "Grass_Common_Tall", "Grass_Wispy_Short"], "d": 0.28, "r": 28.0, "smin": 1.3, "smax": 2.1, "hmin": 1.3, "hmax": 48.0, "slope": 42.0, "bw": [1.0, 0.8, 0.0, 0.15]},
