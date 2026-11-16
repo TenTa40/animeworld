@@ -12,17 +12,14 @@ const MENU = preload("res://scripts/anime/menu.gd")
 const AUDIO = preload("res://scripts/anime/audio.gd")
 const FX = preload("res://scripts/anime/fx.gd")
 const SET = preload("res://scripts/anime/settings.gd")
+const TERRAIN = preload("res://scripts/anime/terrain.gd")
 
-const RADIUS := 95.0
-const HALF := 96.0
-const CELL := 2.0
 const CRYSTALS_TOTAL := 10
-const MAX_ENEMIES := 10
+const MAX_ENEMIES := 8
 const DAY_LEN := 320.0
 const GATE_Z := -9.0
 
-var noise := FastNoiseLite.new()
-var forest_noise := FastNoiseLite.new()
+var terrain = null
 var nature = null
 var hud = null
 var player = null
@@ -39,13 +36,16 @@ var night: float = 0.0
 var _rng := RandomNumberGenerator.new()
 var _t: float = 0.0
 var _tick: float = 0.0
-var _respawn_t: float = 6.0
 var _sun: DirectionalLight3D
 var _moon: DirectionalLight3D
 var _env: Environment
 var _sky_m: ProceduralSkyMaterial
 var _water_mat: ShaderMaterial
-var _height_tex: ImageTexture
+var _far_ocean: MeshInstance3D
+var _far_mat: StandardMaterial3D
+var _enemy_t: float = 0.0
+var _biome_t: float = 0.0
+var _biome_cur: String = ""
 var _cloud_mat: StandardMaterial3D
 var _clouds: Array = []
 var _stars: MeshInstance3D
@@ -59,18 +59,16 @@ var _kf: Array = []
 func _ready() -> void:
 	SET.load_cfg()
 	_rng.randomize()
-	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	noise.frequency = 0.02
-	noise.fractal_octaves = 3
-	noise.seed = 7
-	forest_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	forest_noise.frequency = 0.014
-	forest_noise.seed = 99
 	_init_keyframes()
 	_make_environment()
-	_build_terrain()
-	_build_water()
+	terrain = TERRAIN.new()
+	add_child(terrain)
+	terrain.mat = _terrain_material()
+	terrain.water_mat = _water_material()
+	terrain.budget_us = 7000
+	_build_far_ocean()
 	_build_clouds()
+	terrain.prime(Vector3.ZERO, 1.7)
 	nature = NATURE.new()
 	add_child(nature)
 	if not nature.setup(self):
@@ -93,6 +91,7 @@ func _ready() -> void:
 	player.spawn_pos = Vector3(0.0, height(0.0, 0.0) + 1.0, 0.0)
 	player.position = player.spawn_pos + Vector3(0.0, 1.0, 0.0)
 	add_child(player)
+	terrain.follow = player
 	menu = MENU.new()
 	add_child(menu)
 	menu.start_pressed.connect(_on_start)
@@ -100,12 +99,7 @@ func _ready() -> void:
 	menu.restart_pressed.connect(_on_restart)
 	menu.continue_pressed.connect(_on_continue)
 	menu.settings_changed.connect(_apply_settings)
-	for i in range(CRYSTALS_TOTAL):
-		_spawn_crystal()
-	for i in range(7):
-		_spawn_slime()
-	for i in range(3):
-		_spawn_zombie()
+	_spawn_crystals()
 	_apply_settings()
 	_update_time()
 	menu.show_title()
@@ -121,76 +115,30 @@ func _process(delta: float) -> void:
 	_follow(delta)
 	if state == "playing":
 		game_time += delta
-		_respawn_t -= delta
-		if _respawn_t <= 0.0:
-			_respawn_t = 8.0
-			if get_tree().get_nodes_in_group("enemy").size() < MAX_ENEMIES:
-				if randf() < 0.25 + 0.4 * night:
-					_spawn_zombie()
-				else:
-					_spawn_slime()
+		_enemy_t -= delta
+		if _enemy_t <= 0.0:
+			_enemy_t = 2.0
+			_enemy_tick()
 		if _beacon != null and player != null:
 			var d: Vector2 = Vector2(player.global_position.x - _beacon.global_position.x, player.global_position.z - _beacon.global_position.z)
 			if d.length() < 2.8:
 				_win()
 
-# ------------------------------------------------------------ terrain
+# ------------------------------------------------------------ terrain access (used by player, nature, enemies)
 func height(x: float, z: float) -> float:
-	var d: float = Vector2(x, z).length()
-	var h: float = noise.get_noise_2d(x, z) * 9.0 + 4.0
-	var plateau: float = 1.0 - smoothstep(0.0, 14.0, d)
-	h = lerpf(h, 2.5, plateau)
-	h -= smoothstep(RADIUS * 0.5, RADIUS, d) * 16.0
-	return h
+	return terrain.sample(x, z)
 
 func forest(x: float, z: float) -> float:
-	return forest_noise.get_noise_2d(x, z) * 0.5 + 0.5
+	return terrain.gen.forest(x, z)
 
-func _terrain_color(h: float, x: float, z: float) -> Color:
-	var t: float = noise.get_noise_2d(x * 3.1 + 50.0, z * 3.1) * 0.5 + 0.5
-	var col: Color = Color(0.30, 0.66, 0.22).lerp(Color(0.68, 0.90, 0.32), t)
-	var fo: float = clampf((forest(x, z) - 0.45) * 1.6, 0.0, 1.0)
-	col = col.lerp(Color(0.16, 0.45, 0.20), fo)
-	var sand: float = 1.0 - smoothstep(0.6, 1.5, h)
-	col = col.lerp(Color(0.93, 0.85, 0.58), sand)
-	return col.srgb_to_linear()
+func grove(x: float, z: float) -> float:
+	return terrain.gen.grove(x, z)
 
-func _build_terrain() -> void:
-	var n: int = int(HALF * 2.0 / CELL)
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for j in range(n + 1):
-		for i in range(n + 1):
-			var x: float = -HALF + float(i) * CELL
-			var z: float = -HALF + float(j) * CELL
-			var h: float = height(x, z)
-			st.set_color(_terrain_color(h, x, z))
-			st.set_uv(Vector2(float(i), float(j)))
-			st.add_vertex(Vector3(x, h, z))
-	for j in range(n):
-		for i in range(n):
-			var a: int = j * (n + 1) + i
-			var b: int = a + 1
-			var c: int = a + (n + 1)
-			var d: int = c + 1
-			st.add_index(a)
-			st.add_index(b)
-			st.add_index(c)
-			st.add_index(b)
-			st.add_index(d)
-			st.add_index(c)
-	st.generate_normals()
-	var mesh: ArrayMesh = st.commit()
-	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
-	mi.material_override = _terrain_material()
-	add_child(mi)
-	var body := StaticBody3D.new()
-	body.collision_layer = 1
-	var cs := CollisionShape3D.new()
-	cs.shape = mesh.create_trimesh_shape()
-	body.add_child(cs)
-	add_child(body)
+func biome_vec(x: float, z: float) -> Vector4:
+	return terrain.gen.masks(x, z)
+
+func road_weight(_x: float, _z: float, _h: float) -> float:
+	return 0.0
 
 func _tex_mip(path: String) -> Texture2D:
 	if not ResourceLoader.exists(path):
@@ -206,60 +154,35 @@ func _tex_mip(path: String) -> Texture2D:
 	img.generate_mipmaps()
 	return ImageTexture.create_from_image(img)
 
-func road_weight(x: float, z: float, h: float) -> float:
-	if h < 1.0:
-		return 0.0
-	var cz: float = 14.0 * sin(x * 0.04) + 6.0 * sin(x * 0.11 + 1.0)
-	var sl: float = 14.0 * 0.04 * cos(x * 0.04) + 6.0 * 0.11 * cos(x * 0.11 + 1.0)
-	var d: float = absf(z - cz) / sqrt(1.0 + sl * sl)
-	d += noise.get_noise_2d(x * 0.5 + 300.0, z * 0.5) * 1.0
-	return 1.0 - smoothstep(1.6, 2.6, d)
-
-func _build_splat() -> ImageTexture:
-	var n: int = 256
-	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
-	var himg := Image.create(n, n, false, Image.FORMAT_RGBA8)
-	for j in range(n):
-		for i in range(n):
-			var x: float = -HALF + (float(i) + 0.5) / float(n) * HALF * 2.0
-			var z: float = -HALF + (float(j) + 0.5) / float(n) * HALF * 2.0
-			var h: float = height(x, z)
-			var road: float = road_weight(x, z, h)
-			var rock: float = smoothstep(9.0, 11.0, h)
-			var sand: float = 1.0 - smoothstep(0.6, 1.5, h)
-			var fo: float = clampf((forest(x, z) - 0.45) * 1.6, 0.0, 1.0)
-			img.set_pixel(i, j, Color(road, rock, sand, fo))
-			var hv: float = clampf((h + 6.0) / 12.0, 0.0, 1.0)
-			himg.set_pixel(i, j, Color(hv, hv, hv, 1.0))
-	_height_tex = ImageTexture.create_from_image(himg)
-	return ImageTexture.create_from_image(img)
-
-func _terrain_material() -> Material:
+func _terrain_material() -> ShaderMaterial:
 	var g: Texture2D = _tex_mip("res://assets/ground/grass.jpg")
 	var st: Texture2D = _tex_mip("res://assets/ground/stones.jpg")
 	if g == null or st == null:
-		_build_splat()
 		return TOON.mat(Color(1, 1, 1), null, true)
 	var m := ShaderMaterial.new()
 	m.shader = load("res://shaders/anime/terrain.gdshader") as Shader
 	m.set_shader_parameter("grass_tex", g)
 	m.set_shader_parameter("stone_tex", st)
-	m.set_shader_parameter("splat_tex", _build_splat())
-	m.set_shader_parameter("half_size", HALF)
 	return m
 
-func _build_water() -> void:
-	var mi := MeshInstance3D.new()
-	var pm := PlaneMesh.new()
-	pm.size = Vector2(700, 700)
-	mi.mesh = pm
+func _water_material() -> ShaderMaterial:
 	_water_mat = ShaderMaterial.new()
 	_water_mat.shader = load("res://shaders/anime/water.gdshader") as Shader
-	_water_mat.set_shader_parameter("height_tex", _height_tex)
-	_water_mat.set_shader_parameter("half_size", HALF)
-	mi.material_override = _water_mat
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(mi)
+	return _water_mat
+
+func _build_far_ocean() -> void:
+	_far_ocean = MeshInstance3D.new()
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(6000.0, 6000.0)
+	_far_ocean.mesh = pm
+	_far_mat = StandardMaterial3D.new()
+	_far_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_far_mat.albedo_color = Color(0.10, 0.42, 0.80)
+	_far_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_far_ocean.material_override = _far_mat
+	_far_ocean.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_far_ocean.position = Vector3(0.0, -0.4, 0.0)
+	add_child(_far_ocean)
 
 # ------------------------------------------------------------ sky, light, time of day
 func _init_keyframes() -> void:
@@ -312,7 +235,7 @@ func _make_environment() -> void:
 	_env.ambient_light_energy = 0.75
 	_env.fog_enabled = true
 	_env.fog_light_color = Color(0.72, 0.84, 1.0)
-	_env.fog_density = 0.009
+	_env.fog_density = 0.0032
 	_env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	var we := WorldEnvironment.new()
 	we.environment = _env
@@ -369,6 +292,9 @@ func _update_time() -> void:
 	_sun.rotation_degrees = Vector3(pitch, yaw, 0.0)
 	var wt: Color = amb.lerp(sc, 0.55) * clampf(0.30 + e * 0.55, 0.2, 1.25)
 	_water_mat.set_shader_parameter("light_tint", Vector3(wt.r, wt.g, wt.b))
+	var oc: Color = Color(0.10, 0.42, 0.80) * wt
+	oc.a = 1.0
+	_far_mat.albedo_color = oc
 	var cc: Color = hor.lerp(Color(1, 1, 1), 0.5) * clampf(0.30 + e * 0.75, 0.28, 1.1)
 	cc.a = 0.93
 	_cloud_mat.albedo_color = cc
@@ -383,17 +309,35 @@ func _follow(delta: float) -> void:
 		return
 	var pp: Vector3 = player.global_position
 	_stars.global_position = pp
+	_far_ocean.global_position = Vector3(pp.x, -0.4, pp.z)
 	_petals.global_position = pp + Vector3(0.0, 1.5 if _petal_night else 8.0, 0.0)
 	for c in _clouds:
 		var cm: MeshInstance3D = c as MeshInstance3D
-		cm.position.x += delta * 1.4
-		if cm.position.x > 175.0:
-			cm.position.x = -175.0
+		cm.position.x += delta * 1.6
+		var dx: float = cm.position.x - pp.x
+		if dx > 300.0:
+			cm.position.x -= 600.0
+		elif dx < -300.0:
+			cm.position.x += 600.0
+		var dz: float = cm.position.z - pp.z
+		if dz > 300.0:
+			cm.position.z -= 600.0
+		elif dz < -300.0:
+			cm.position.z += 600.0
 	if _fire_light != null:
 		var base: float = 0.7 + 1.1 * night
 		_fire_light.light_energy = base * (1.0 + 0.12 * sin(_t * 17.0) + 0.10 * sin(_t * 7.3))
 	if _beacon != null:
 		_beacon.rotation.y += delta * 0.6
+	_biome_t -= delta
+	if _biome_t <= 0.0:
+		_biome_t = 0.7
+		var w: Vector4 = biome_vec(pp.x, pp.z)
+		var nm: String = terrain.gen.biome_name(w, grove(pp.x, pp.z) * w.x)
+		if nm != "" and nm != _biome_cur:
+			_biome_cur = nm
+			if state == "playing":
+				hud.toast("منطقه‌ی جدید: " + nm, 3.0)
 
 # ------------------------------------------------------------ clouds, petals
 func _cloud_tex() -> ImageTexture:
@@ -426,15 +370,15 @@ func _build_clouds() -> void:
 	_cloud_mat.disable_fog = true
 	_cloud_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var q := QuadMesh.new()
-	q.size = Vector2(60.0, 30.0)
+	q.size = Vector2(120.0, 60.0)
 	q.material = _cloud_mat
-	for i in range(14):
+	for i in range(16):
 		var mi := MeshInstance3D.new()
 		mi.mesh = q
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		var s: float = _rng.randf_range(0.7, 1.7)
 		mi.scale = Vector3(s, s, s)
-		mi.position = Vector3(_rng.randf_range(-170.0, 170.0), _rng.randf_range(60.0, 92.0), _rng.randf_range(-170.0, 170.0))
+		mi.position = Vector3(_rng.randf_range(-300.0, 300.0), _rng.randf_range(150.0, 220.0), _rng.randf_range(-300.0, 300.0))
 		add_child(mi)
 		_clouds.append(mi)
 
@@ -557,50 +501,123 @@ func _build_camp() -> void:
 	fire.add_child(_fire_light)
 
 # ------------------------------------------------------------ spawning
-func _valid_spot(min_d: float, max_d: float) -> Vector3:
-	for k in range(60):
-		var ang: float = _rng.randf() * TAU
-		var r: float = _rng.randf_range(min_d, max_d)
-		var x: float = cos(ang) * r
-		var z: float = sin(ang) * r
-		var h: float = height(x, z)
-		if h > 1.8 and h < 9.5:
-			if nature != null and nature.near_tree(Vector3(x, h, z), 2.2):
-				continue
-			return Vector3(x, h, z)
-	return Vector3(0.0, height(0.0, 0.0), 0.0) + Vector3(3.0, 0.0, 3.0)
+func _slope_ok(x: float, z: float, min_ny: float) -> bool:
+	var n: Vector3 = Vector3(height(x - 1.5, z) - height(x + 1.5, z), 3.0, height(x, z - 1.5) - height(x, z + 1.5)).normalized()
+	return n.y >= min_ny
 
-func _spawn_crystal() -> void:
-	var p: Vector3 = _valid_spot(12.0, 82.0)
-	for tries in range(25):
+func _biome_spot(biome: int, placed: Array) -> Vector3:
+	var gen = terrain.gen
+	for tries in range(300):
+		var x: float = 0.0
+		var z: float = 0.0
+		var a: float = _rng.randf() * TAU
+		if biome == 4:
+			var rg: float = _rng.randf_range(5.0, 32.0)
+			x = gen.GROVE.x + cos(a) * rg
+			z = gen.GROVE.y + sin(a) * rg
+		else:
+			var rr: float = _rng.randf_range(45.0, 400.0)
+			x = cos(a) * rr
+			z = sin(a) * rr
+			var w: Vector4 = biome_vec(x, z)
+			var wv: float = w.x
+			if biome == 1:
+				wv = w.y
+			elif biome == 2:
+				wv = w.z
+			elif biome == 3:
+				wv = w.w
+			if wv < 0.75:
+				continue
+		var h: float = height(x, z)
+		if h < 2.2 or h > 52.0:
+			continue
+		if not _slope_ok(x, z, 0.82):
+			continue
+		var p: Vector3 = Vector3(x, h, z)
 		var ok: bool = true
-		for c in get_tree().get_nodes_in_group("crystal"):
-			if (c as Node3D).global_position.distance_to(p) < 20.0:
+		for q in placed:
+			if (q as Vector3).distance_to(p) < 45.0:
 				ok = false
 				break
 		if ok:
-			break
-		p = _valid_spot(12.0, 82.0)
-	var cr = CRYSTAL.new()
-	cr.position = p
-	actors.add_child(cr)
-	cr.collected.connect(_on_crystal)
+			return p
+	return Vector3(40.0 + float(placed.size()) * 12.0, height(40.0, 0.0), 20.0)
 
-func _spawn_slime() -> void:
-	var p: Vector3 = _valid_spot(22.0, 82.0)
+func _spawn_crystals() -> void:
+	var plan: Array = [0, 0, 1, 1, 2, 2, 3, 3, 4, 1]
+	var placed: Array = []
+	for b in plan:
+		var p: Vector3 = _biome_spot(int(b), placed)
+		placed.append(p)
+		var cr = CRYSTAL.new()
+		cr.position = p
+		actors.add_child(cr)
+		cr.collected.connect(_on_crystal)
+
+func _enemy_spot(pp: Vector3) -> Vector3:
+	for tries in range(30):
+		var a: float = _rng.randf() * TAU
+		var r: float = _rng.randf_range(38.0, 70.0)
+		var x: float = pp.x + cos(a) * r
+		var z: float = pp.z + sin(a) * r
+		if Vector2(x, z).length() < 32.0:
+			continue
+		if not terrain.has_collision_at(x, z):
+			continue
+		var h: float = height(x, z)
+		if h < 1.5 or h > 70.0:
+			continue
+		if not _slope_ok(x, z, 0.7):
+			continue
+		return Vector3(x, h, z)
+	return Vector3(0.0, -100.0, 0.0)
+
+func _spawn_enemy_at(p: Vector3) -> void:
+	var w: Vector4 = biome_vec(p.x, p.z)
+	var zr: float = 0.15 + 0.45 * night + 0.2 * (w.w + w.z)
+	if _rng.randf() < zr:
+		var z = ZOMBIE.new()
+		z.position = p + Vector3(0.0, 1.0, 0.0)
+		actors.add_child(z)
+		z.died.connect(_on_enemy_died)
+		return
+	var kind: int = 0
+	if w.z > 0.5:
+		kind = 2 if _rng.randf() < 0.75 else 0
+	elif w.w > 0.5:
+		kind = 1
+	elif w.y > 0.5:
+		kind = 1 if _rng.randf() < 0.45 else 0
+	else:
+		kind = 0 if _rng.randf() < 0.75 else 1
 	var s = SLIME.new()
-	var roll: float = _rng.randf()
-	s.kind = 0 if roll < 0.5 else (1 if roll < 0.8 else 2)
+	s.kind = kind
 	s.position = p + Vector3(0.0, 0.6, 0.0)
 	actors.add_child(s)
 	s.died.connect(_on_enemy_died)
 
-func _spawn_zombie() -> void:
-	var p: Vector3 = _valid_spot(28.0, 82.0)
-	var z = ZOMBIE.new()
-	z.position = p + Vector3(0.0, 1.0, 0.0)
-	actors.add_child(z)
-	z.died.connect(_on_enemy_died)
+func _enemy_tick() -> void:
+	if player == null:
+		return
+	var pp: Vector3 = player.global_position
+	var alive: int = 0
+	for e in get_tree().get_nodes_in_group("enemy"):
+		var en: Node3D = e as Node3D
+		if en == null or bool(en.get("dead")):
+			continue
+		if Vector2(en.global_position.x - pp.x, en.global_position.z - pp.z).length() > 100.0:
+			en.queue_free()
+		else:
+			alive += 1
+	for k in range(3):
+		if alive >= MAX_ENEMIES:
+			break
+		var p: Vector3 = _enemy_spot(pp)
+		if p.y < -50.0:
+			break
+		_spawn_enemy_at(p)
+		alive += 1
 
 func _on_crystal() -> void:
 	collected += 1
@@ -686,9 +703,11 @@ func _on_start() -> void:
 	hud.reset_input()
 	hud.set_counts(collected, kills)
 	actors.process_mode = Node.PROCESS_MODE_INHERIT
+	terrain.budget_us = 3500
+	_enemy_tick()
 	tod = 0.33
 	_update_time()
-	hud.toast("به جزیره‌ی آرام خوش اومدی! ۱۰ کریستال پیدا کن و مواظب موجودات جزیره باش.", 6.0)
+	hud.toast("به جزیره‌ی آرام خوش اومدی! ۱۰ کریستال توی چهار منطقه‌ی جزیره پنهونه؛ نقشه‌ی کوچیک جهتشون رو نشون می‌ده.", 7.0)
 
 func _on_pause() -> void:
 	if state != "playing":

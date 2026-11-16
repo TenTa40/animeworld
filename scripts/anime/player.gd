@@ -4,7 +4,7 @@ extends CharacterBody3D
 const HERO = preload("res://scripts/anime/hero.gd")
 const FX = preload("res://scripts/anime/fx.gd")
 
-const SPEED := 7.0
+const SPEED := 8.0
 const JUMP := 9.0
 const GRAV := 26.0
 const SKILL_CD := 7.0
@@ -44,6 +44,8 @@ var _air_t: float = 0.0
 var _gliding: bool = false
 var _shake: float = 0.0
 var _step_t: float = 0.0
+var _swim: bool = false
+var _swim_fx: float = 0.0
 
 func _ready() -> void:
 	add_to_group("player")
@@ -69,7 +71,8 @@ func _ready() -> void:
 	_cam = Camera3D.new()
 	_cam.position = Vector3(0.0, 0.0, _cam_dist)
 	_cam.fov = 46.0
-	_cam.far = 220.0
+	_cam.near = 0.12
+	_cam.far = 900.0
 	_rig.add_child(_cam)
 	_cam.current = true
 
@@ -114,6 +117,10 @@ func _physics_process(delta: float) -> void:
 		_face_y = atan2(dir.x, dir.z)
 
 	var on_floor: bool = is_on_floor()
+	var gh: float = 0.0
+	if world != null:
+		gh = float(world.height(global_position.x, global_position.z))
+	_swim = gh < -0.9 and global_position.y < 0.3
 	if on_floor:
 		_air_t = 0.0
 		_jumps = 0
@@ -130,7 +137,10 @@ func _physics_process(delta: float) -> void:
 	if hud.take_attack() and _atk_cd <= 0.0 and _dash_t <= 0.0:
 		_attack(dir if moving else Vector3.ZERO)
 	if hud.take_jump():
-		if on_floor:
+		if _swim:
+			velocity.y = 5.0
+			FX.sfx(self, "jump", -8.0, 0.8)
+		elif on_floor:
 			velocity.y = JUMP
 			_jumps = 1
 			FX.sfx(self, "jump", -4.0)
@@ -153,11 +163,11 @@ func _physics_process(delta: float) -> void:
 		velocity.x = _dash_dir.x * 20.0
 		velocity.z = _dash_dir.z * 20.0
 	else:
-		var tgt: Vector3 = dir * SPEED * mag
+		var tgt: Vector3 = dir * SPEED * mag * (0.6 if _swim else 1.0)
 		if _lunge_t > 0.0:
 			_lunge_t -= delta
 			tgt += Vector3(sin(_face_y), 0.0, cos(_face_y)) * 5.0
-		if not on_floor and hud.glide_held and _air_t > 0.35 and velocity.y < 0.5:
+		if not on_floor and not _swim and hud.glide_held and _air_t > 0.35 and velocity.y < 0.5:
 			_gliding = true
 			var cam_fwd: Vector3 = Vector3(-sin(yaw), 0.0, -cos(yaw))
 			var gd: Vector3 = dir if moving else cam_fwd
@@ -167,7 +177,9 @@ func _physics_process(delta: float) -> void:
 		velocity.z = move_toward(velocity.z, tgt.z, 45.0 * delta)
 
 	# vertical
-	if _gliding:
+	if _swim:
+		velocity.y = lerpf(velocity.y, clampf((-0.35 - global_position.y) * 5.0, -4.0, 4.0), minf(1.0, 8.0 * delta))
+	elif _gliding:
 		velocity.y = maxf(velocity.y - 8.0 * delta, -2.4)
 	elif not on_floor:
 		velocity.y -= GRAV * delta
@@ -179,7 +191,7 @@ func _physics_process(delta: float) -> void:
 	_hero.rotation.y = lerp_angle(_hero.rotation.y, _face_y, minf(1.0, 14.0 * delta))
 	var hs: float = Vector2(velocity.x, velocity.z).length() / SPEED
 	_hero.run = clampf(hs, 0.0, 1.2) if on_floor else clampf(hs, 0.0, 1.0)
-	_hero.airborne = not is_on_floor()
+	_hero.airborne = (not is_on_floor()) and not _swim
 	_hero.gliding = _gliding
 	if on_floor and hs > 0.4:
 		_step_t -= delta
@@ -190,8 +202,21 @@ func _physics_process(delta: float) -> void:
 	hud.energy = energy
 	hud.skill_cd = _skill_cd / SKILL_CD
 	hud.dash_cd = _dash_cd / DASH_CD
-	if global_position.y < -6.0:
+	if _swim:
+		_swim_fx -= delta
+		if _swim_fx <= 0.0 and hs > 0.2:
+			_swim_fx = 0.55
+			FX.ring(self, Vector3(global_position.x, 0.0, global_position.z), 1.6, Color(1, 1, 1, 0.55), 0.5)
+	elif world != null and gh > -0.5 and global_position.y < gh - 6.0:
+		global_position.y = gh + 2.0
+		velocity.y = 0.0
+	if global_position.y < -60.0:
 		_respawn(false)
+	var flat: Vector2 = Vector2(global_position.x, global_position.z)
+	if flat.length() > 620.0:
+		var kk: float = 620.0 / flat.length()
+		global_position.x *= kk
+		global_position.z *= kk
 	_cam_dist_target = 5.6 + (1.3 if _gliding else 0.0)
 	_fov_target = 70.0 + (9.0 if _gliding else 0.0) + (4.0 if _dash_t > 0.0 else 0.0)
 	_update_camera(delta)

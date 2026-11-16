@@ -41,6 +41,8 @@ var _player = null
 var _t: float = 0.0
 var _sb_bg: StyleBoxFlat
 var _sb_fill: StyleBoxFlat
+var _near_t: float = 0.0
+var _near_txt: String = ""
 
 class Pad extends Control:
 	var h = null
@@ -292,6 +294,10 @@ func _input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	_near_t -= delta
+	if _near_t <= 0.0:
+		_near_t = 0.5
+		_update_near()
 	glide_held = _key_glide or _touch_glide
 	var kb: Vector2 = Vector2.ZERO
 	if input_enabled and not get_tree().paused:
@@ -345,6 +351,23 @@ func _map_offset(wp: Vector3, ppos: Vector3, yaw: float, k: float, mr: float, cl
 			return Vector2(INF, INF)
 	return v
 
+func _update_near() -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	var best: float = INF
+	for n in get_tree().get_nodes_in_group("crystal"):
+		var d: float = (n as Node3D).global_position.distance_to(_player.global_position)
+		if d < best:
+			best = d
+	if is_inf(best):
+		var bc: Node = get_tree().get_first_node_in_group("beacon")
+		if bc != null:
+			_near_txt = "دروازه: " + fa(int((bc as Node3D).global_position.distance_to(_player.global_position))) + " متر"
+		else:
+			_near_txt = ""
+	else:
+		_near_txt = "کریستال: " + fa(int(best)) + " متر"
+
 func _paint_minimap(c: Control, u: float) -> void:
 	var mr: float = 84.0 * u
 	var mc: Vector2 = Vector2(24.0 * u + mr, 24.0 * u + mr)
@@ -355,7 +378,7 @@ func _paint_minimap(c: Control, u: float) -> void:
 		return
 	var yaw: float = float(_player.yaw)
 	var ppos: Vector3 = _player.global_position
-	var k: float = mr / 45.0
+	var k: float = mr / 60.0
 	c.draw_colored_polygon(PackedVector2Array([mc, mc + Vector2(-0.62, -1.0) * mr * 0.8, mc + Vector2(0.62, -1.0) * mr * 0.8]), Color(1, 1, 1, 0.10))
 	for n in get_tree().get_nodes_in_group("heal"):
 		var o0: Vector2 = _map_offset((n as Node3D).global_position, ppos, yaw, k, mr, false)
@@ -386,6 +409,8 @@ func _paint_minimap(c: Control, u: float) -> void:
 	var nd: Vector2 = nm.normalized() * (mr - 12.0 * u)
 	c.draw_string(_font, mc + nd + Vector2(-8.0 * u, 7.0 * u), "N", HORIZONTAL_ALIGNMENT_CENTER, 16.0 * u, int(18.0 * u), Color(1.0, 0.85, 0.5))
 	c.draw_arc(mc, mr, 0.0, TAU, 48, Color(1, 1, 1, 0.85), 3.0 * u)
+	if _near_txt != "":
+		c.draw_string(_font, mc + Vector2(-mr, mr + 30.0 * u), _near_txt, HORIZONTAL_ALIGNMENT_CENTER, mr * 2.0, int(22.0 * u), Color(1, 1, 1, 0.95))
 
 func _draw_btn(c: Control, nm: String, fill: Color) -> Vector2:
 	var p: Vector2 = _btn_pos(nm)

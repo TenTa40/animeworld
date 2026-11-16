@@ -9,7 +9,11 @@ uniform float sway = 0.0;
 uniform float shade_threshold = 0.10;
 uniform vec3 shadow_tint = vec3(0.18, 0.18, 0.34);
 
+// per-instance data (MultiMesh custom data): rgb = tint, a = amount of luma-mapped recolour (0 = plain multiply)
+varying vec4 itint;
+
 void vertex() {
+	itint = INSTANCE_CUSTOM;
 	if (sway > 0.0) {
 		vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 		float k = sway * max(VERTEX.y, 0.0);
@@ -23,7 +27,15 @@ void fragment() {
 	if (use_alpha && t.a < alpha_cut) {
 		discard;
 	}
-	ALBEDO = t.rgb * tint.rgb;
+	vec3 base = t.rgb * tint.rgb;
+	vec3 col = base;
+	if (itint.a > 0.01) {
+		float lum = dot(t.rgb, vec3(0.30, 0.59, 0.11));
+		col = mix(base, itint.rgb * lum * 2.3, itint.a);
+	} else if (dot(itint.rgb, vec3(1.0)) > 0.01) {
+		col = base * itint.rgb;
+	}
+	ALBEDO = col;
 	ROUGHNESS = 1.0;
 }
 
