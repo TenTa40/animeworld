@@ -13,6 +13,7 @@ const AUDIO = preload("res://scripts/anime/audio.gd")
 const FX = preload("res://scripts/anime/fx.gd")
 const SET = preload("res://scripts/anime/settings.gd")
 const TERRAIN = preload("res://scripts/anime/terrain.gd")
+const IMPOSTOR = preload("res://scripts/anime/impostor.gd")
 
 const CRYSTALS_TOTAL := 10
 const MAX_ENEMIES := 8
@@ -46,6 +47,8 @@ var _far_mat: StandardMaterial3D
 var _enemy_t: float = 0.0
 var _biome_t: float = 0.0
 var _biome_cur: String = ""
+var _ld = null
+var _inited: bool = false
 var _cloud_mat: StandardMaterial3D
 var _clouds: Array = []
 var _stars: MeshInstance3D
@@ -57,23 +60,54 @@ var _beacon: Node3D = null
 var _kf: Array = []
 
 func _ready() -> void:
+	_boot()
+
+func _step(p: float, text: String) -> void:
+	if _ld != null:
+		_ld.set_progress(p, text)
+	await get_tree().process_frame
+
+func _boot() -> void:
+	_ld = get_tree().get_first_node_in_group("loading")
 	SET.load_cfg()
 	_rng.randomize()
+	await _step(0.03, "آماده‌سازی آسمان و نور...")
 	_init_keyframes()
 	_make_environment()
 	terrain = TERRAIN.new()
 	add_child(terrain)
 	terrain.mat = _terrain_material()
 	terrain.water_mat = _water_material()
-	terrain.budget_us = 7000
+	terrain.budget_us = 12000
 	_build_far_ocean()
 	_build_clouds()
-	terrain.prime(Vector3.ZERO, 1.7)
 	nature = NATURE.new()
 	add_child(nature)
+	await _step(0.08, "ساختن جنگل‌های دور...")
+	var imp: Dictionary = await IMPOSTOR.bake(self, nature)
+	if not imp.is_empty():
+		terrain.set_impostors(imp["tex"] as Texture2D, imp["info"] as Array)
+	await _step(0.14, "شکل دادن به زمین...")
+	terrain.update(Vector3.ZERO)
+	var tot: int = maxi(1, terrain.pending(3.6))
+	while true:
+		var rem: int = terrain.pending(3.6)
+		if rem <= 0:
+			break
+		await _step(0.14 + 0.36 * (1.0 - float(rem) / float(tot)), "شکل دادن به زمین...")
+	await _step(0.52, "کاشتن درخت و چمن...")
 	if not nature.setup(self):
 		nature.queue_free()
 		nature = null
+	if nature != null:
+		var ntot: int = maxi(1, nature.pending(Vector3.ZERO))
+		while true:
+			var nrem: int = nature.pending(Vector3.ZERO)
+			if nrem <= 0:
+				break
+			nature.build_some(Vector3.ZERO, 14000)
+			await _step(0.52 + 0.24 * (1.0 - float(nrem) / float(ntot)), "کاشتن درخت و چمن...")
+	await _step(0.78, "اردوگاه، صدا و کریستال‌ها...")
 	_build_camp()
 	_build_petals()
 	audio = AUDIO.new()
@@ -85,13 +119,13 @@ func _ready() -> void:
 	hud.visible = false
 	hud.cells_total = CRYSTALS_TOTAL
 	hud.pause_pressed.connect(_on_pause)
+	await _step(0.84, "ساختن قهرمان...")
 	player = PLAYER.new()
 	player.hud = hud
 	player.world = self
 	player.spawn_pos = Vector3(0.0, height(0.0, 0.0) + 1.0, 0.0)
 	player.position = player.spawn_pos + Vector3(0.0, 1.0, 0.0)
 	add_child(player)
-	terrain.follow = player
 	menu = MENU.new()
 	add_child(menu)
 	menu.start_pressed.connect(_on_start)
@@ -100,12 +134,49 @@ func _ready() -> void:
 	menu.continue_pressed.connect(_on_continue)
 	menu.settings_changed.connect(_apply_settings)
 	_spawn_crystals()
+	await _step(0.90, "آماده‌سازی جلوه‌ها...")
 	_apply_settings()
 	_update_time()
-	menu.show_title()
+	await _warmup()
+	terrain.budget_us = 7000
+	terrain.follow = player
 	actors.process_mode = Node.PROCESS_MODE_DISABLED
+	_inited = true
+	await _step(1.0, "آماده‌ست!")
+	menu.show_title()
+	if _ld != null:
+		_ld.finish()
+
+# draws one of everything behind the loading screen so shaders compile before gameplay
+func _warmup() -> void:
+	var holder := Node3D.new()
+	holder.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(holder)
+	var base: Vector3 = player.global_position
+	var c1 = CRYSTAL.new()
+	c1.position = base + Vector3(0.7, 0.3, 0.5)
+	holder.add_child(c1)
+	var c2 = CRYSTAL.new()
+	c2.kind = "heal"
+	c2.position = base + Vector3(-0.7, 0.3, 0.5)
+	holder.add_child(c2)
+	var sl = SLIME.new()
+	sl.position = base + Vector3(-1.0, 0.2, -0.6)
+	holder.add_child(sl)
+	var zb = ZOMBIE.new()
+	zb.position = base + Vector3(1.0, 0.2, -0.7)
+	holder.add_child(zb)
+	FX.burst(self, base + Vector3(0.0, 1.0, 0.0), Color(1, 1, 1), 8, 2.0, 0.1, 0.5, 2.0)
+	FX.ring(self, base, 2.0, Color(1, 1, 1), 0.5)
+	FX.dmg_number(self, base + Vector3(0.0, 2.0, 0.0), "۸", Color(1, 1, 1), 40)
+	player._hero.swing(0)
+	for i in range(14):
+		await get_tree().process_frame
+	holder.queue_free()
 
 func _process(delta: float) -> void:
+	if not _inited:
+		return
 	_t += delta
 	tod = fposmod(tod + delta / DAY_LEN, 1.0)
 	_tick -= delta
@@ -295,6 +366,8 @@ func _update_time() -> void:
 	var oc: Color = Color(0.10, 0.42, 0.80) * wt
 	oc.a = 1.0
 	_far_mat.albedo_color = oc
+	if terrain != null and terrain.imp_mat != null:
+		terrain.imp_mat.set_shader_parameter("light_tint", Vector3(wt.r, wt.g, wt.b))
 	var cc: Color = hor.lerp(Color(1, 1, 1), 0.5) * clampf(0.30 + e * 0.75, 0.28, 1.1)
 	cc.a = 0.93
 	_cloud_mat.albedo_color = cc
@@ -782,12 +855,18 @@ func _apply_settings() -> void:
 			nature.Q = 1.0
 			nature.DENSITY = 1.0
 	if terrain != null:
+		var qf: float = 1.0
 		if SET.quality == 0:
 			terrain.dist_scale = 0.55
+			qf = 0.6
 		elif SET.quality == 1:
 			terrain.dist_scale = 0.8
+			qf = 0.8
 		else:
 			terrain.dist_scale = 1.0
+		if terrain.imp_mat != null:
+			terrain.imp_mat.set_shader_parameter("fade_in_start", 62.0 * qf * 0.60)
+			terrain.imp_mat.set_shader_parameter("fade_in_end", 62.0 * qf * 0.94)
 		if player != null:
 			terrain.update(player.global_position)
 		else:

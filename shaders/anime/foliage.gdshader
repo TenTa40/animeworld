@@ -9,7 +9,8 @@ uniform float sway = 0.0;
 uniform float shade_threshold = 0.10;
 uniform vec3 shadow_tint = vec3(0.18, 0.18, 0.34);
 
-// per-instance data (MultiMesh custom data): rgb = tint, a = amount of luma-mapped recolour (0 = plain multiply)
+// per-instance data (MultiMesh custom data):
+//   rgb = tint (multiply) or recolour target, a = +fade_end (plain) or -fade_end (recolour)
 varying vec4 itint;
 
 void vertex() {
@@ -27,11 +28,21 @@ void fragment() {
 	if (use_alpha && t.a < alpha_cut) {
 		discard;
 	}
+	float fe = abs(itint.a);
+	if (fe > 1.0) {
+		// dissolve with distance so streamed vegetation never pops in
+		float dist = length(VERTEX);
+		float f = 1.0 - smoothstep(fe * 0.72, fe, dist);
+		float n = fract(52.9829189 * fract(dot(FRAGCOORD.xy, vec2(0.06711056, 0.00583715))));
+		if (f < n) {
+			discard;
+		}
+	}
 	vec3 base = t.rgb * tint.rgb;
 	vec3 col = base;
-	if (itint.a > 0.01) {
+	if (itint.a < 0.0) {
 		float lum = dot(t.rgb, vec3(0.30, 0.59, 0.11));
-		col = mix(base, itint.rgb * lum * 2.3, itint.a);
+		col = mix(base, itint.rgb * lum * 2.3, 0.85);
 	} else if (dot(itint.rgb, vec3(1.0)) > 0.01) {
 		col = base * itint.rgb;
 	}

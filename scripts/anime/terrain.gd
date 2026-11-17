@@ -37,6 +37,9 @@ var _queue: Array = []
 var _job: Job = null
 var _center: Vector3 = Vector3.ZERO
 var _upd_t: float = 0.0
+var imp_mat: ShaderMaterial = null
+var imp_info: Array = []
+var _imp_mesh: QuadMesh = null
 var _tree_mesh: CylinderMesh = null
 var _tree_mat: ShaderMaterial = null
 
@@ -314,11 +317,14 @@ func _finalize(j: Job) -> void:
 	mi.position = origin
 	add_child(mi)
 	rec["mi"] = mi
-	if j.lod >= 1:
-		var ft: MultiMeshInstance3D = _far_trees(j, origin)
-		if ft != null:
-			add_child(ft)
-			rec["ft"] = ft
+	var ft: MultiMeshInstance3D = null
+	if imp_mat != null:
+		ft = _far_trees_imp(j, origin)
+	elif j.lod >= 1:
+		ft = _far_trees(j, origin)
+	if ft != null:
+		add_child(ft)
+		rec["ft"] = ft
 	_set_record(j.key, rec)
 
 func _set_record(key: Vector2i, rec: Dictionary) -> void:
@@ -419,4 +425,87 @@ func _far_trees(j: Job, origin: Vector3) -> MultiMeshInstance3D:
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mmi.position = origin
 	mmi.visibility_range_begin = 72.0
+	return mmi
+
+# ------------------------------------------------------------ impostor forests (billboards of the real trees)
+func set_impostors(tex: Texture2D, info: Array) -> void:
+	imp_mat = ShaderMaterial.new()
+	imp_mat.shader = load("res://shaders/anime/impostor.gdshader") as Shader
+	imp_mat.set_shader_parameter("atlas", tex)
+	imp_info = info
+	_imp_mesh = QuadMesh.new()
+	_imp_mesh.size = Vector2(1.0, 1.0)
+	_imp_mesh.material = imp_mat
+
+func pending(d_max: float) -> int:
+	var n: int = 0
+	for q in _queue:
+		if (q as Job).d <= d_max:
+			n += 1
+	if _job != null and _job.d <= d_max:
+		n += 1
+	return n
+
+func _far_trees_imp(j: Job, origin: Vector3) -> MultiMeshInstance3D:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = (j.cx * 73856093) ^ (j.cz * 19349663) ^ 4242
+	var factors: Array = [1.0, 1.0, 0.6, 0.35, 0.2]
+	var tries: int = int(CS * CS * 0.0135 * float(factors[mini(j.lod, 4)]))
+	var xfs: Array = []
+	var cds: Array = []
+	for t in range(tries):
+		var lx: float = rng.randf() * CS
+		var lz: float = rng.randf() * CS
+		var roll: float = rng.randf()
+		var r2: float = rng.randf()
+		var scl: float = rng.randf_range(0.9, 1.5)
+		var br: float = rng.randf_range(0.88, 1.08)
+		var x: float = origin.x + lx
+		var z: float = origin.z + lz
+		var w: Vector4 = gen.masks(x, z)
+		var gv: float = gen.grove(x, z) * w.x
+		var p: float = w.y + w.w * 0.65 + w.x * (0.06 + 0.9 * gv)
+		p *= smoothstep(0.28, 0.55, gen.forest(x, z)) * 0.8 + 0.2
+		if roll > p:
+			continue
+		var h: float = _hbil(j, lx, lz)
+		if h < 1.8 or h > 56.0:
+			continue
+		if absf(_hbil(j, minf(lx + 3.0, CS), lz) - h) > 3.6:
+			continue
+		var cell: int = 0
+		var pink: float = 0.0
+		var bright: float = br
+		if gv > 0.5:
+			cell = 1 if r2 < 0.5 else 3
+			pink = 1.0
+		elif w.w > 0.5:
+			cell = 0 if r2 < 0.5 else 2
+			bright = br * 0.88
+		elif w.y > 0.5:
+			cell = int(r2 * 4.0) % 4
+			bright = br * 0.86
+		else:
+			cell = 1 if r2 < 0.5 else 3
+		var inf: Vector3 = imp_info[cell]
+		if inf.z < 0.5:
+			continue
+		var sc: float = scl * (1.0 + 0.22 * float(maxi(j.lod - 1, 0)))
+		var side: float = inf.x * sc
+		xfs.append(Transform3D(Basis.IDENTITY.scaled(Vector3(side, side, 1.0)), Vector3(lx, h + inf.y * sc - 0.2, lz)))
+		cds.append(Color(float(cell), pink, bright, 0.0))
+	if xfs.is_empty():
+		return null
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_custom_data = true
+	mm.mesh = _imp_mesh
+	mm.instance_count = xfs.size()
+	for i in range(xfs.size()):
+		mm.set_instance_transform(i, xfs[i] as Transform3D)
+		mm.set_instance_custom_data(i, cds[i] as Color)
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mmi.position = origin
 	return mmi

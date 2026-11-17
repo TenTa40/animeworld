@@ -10,13 +10,13 @@ var DENSITY: float = 1.0
 
 # d = instances per m2, r = build radius (m), bw = density per biome [plains, forest, desert, mountain]
 const CATS := [
-	{"names": ["CommonTree_5", "CommonTree_3", "CommonTree_4", "CommonTree_1"], "d": 0.010, "r": 62.0, "smin": 0.9, "smax": 1.5, "hmin": 1.8, "hmax": 42.0, "slope": 30.0, "forest": true, "collide": true, "rmin": 9.0, "bw": [0.35, 1.2, 0.0, 0.08], "grove": 3.0},
-	{"names": ["Pine_5", "Pine_4"], "d": 0.010, "r": 62.0, "smin": 0.9, "smax": 1.6, "hmin": 1.8, "hmax": 58.0, "slope": 34.0, "forest": true, "collide": true, "rmin": 9.0, "bw": [0.05, 0.7, 0.0, 0.9]},
+	{"names": ["CommonTree_5", "CommonTree_3", "CommonTree_4", "CommonTree_1"], "d": 0.013, "r": 62.0, "smin": 0.9, "smax": 1.5, "hmin": 1.8, "hmax": 42.0, "slope": 30.0, "forest": true, "collide": true, "rmin": 9.0, "bw": [0.35, 1.2, 0.0, 0.08], "grove": 3.0},
+	{"names": ["Pine_5", "Pine_4"], "d": 0.012, "r": 62.0, "smin": 0.9, "smax": 1.6, "hmin": 1.8, "hmax": 58.0, "slope": 34.0, "forest": true, "collide": true, "rmin": 9.0, "bw": [0.05, 0.7, 0.0, 0.9]},
 	{"names": ["Bush_Common", "Bush_Common_Flowers"], "d": 0.008, "r": 60.0, "smin": 0.8, "smax": 1.5, "hmin": 1.6, "hmax": 45.0, "slope": 35.0, "forest": true, "rmin": 6.0, "bw": [0.8, 1.0, 0.2, 0.15]},
 	{"names": ["Rock_Medium_1", "Rock_Medium_2", "Rock_Medium_3"], "d": 0.0035, "r": 80.0, "smin": 0.7, "smax": 1.8, "hmin": 0.8, "hmax": 200.0, "slope": 70.0, "collide": true, "rmin": 10.0, "bw": [0.4, 0.5, 1.4, 2.2]},
-	{"names": ["Grass_Common_Short", "Grass_Common_Short", "Grass_Common_Tall", "Grass_Wispy_Short"], "d": 0.28, "r": 28.0, "smin": 1.3, "smax": 2.1, "hmin": 1.3, "hmax": 48.0, "slope": 42.0, "bw": [1.0, 0.8, 0.0, 0.15]},
-	{"names": ["Fern_1", "Plant_1_Big", "Plant_7_Big", "Clover_1"], "d": 0.03, "r": 42.0, "smin": 0.5, "smax": 1.0, "hmin": 1.6, "hmax": 45.0, "slope": 40.0, "forest": true, "bw": [0.4, 1.2, 0.0, 0.2]},
-	{"names": ["Flower_3_Group", "Flower_3_Single", "Flower_4_Group"], "d": 0.04, "r": 40.0, "smin": 0.9, "smax": 1.4, "hmin": 1.6, "hmax": 30.0, "slope": 30.0, "bw": [1.3, 0.2, 0.0, 0.05], "grove": 2.5},
+	{"names": ["Grass_Common_Short", "Grass_Common_Short", "Grass_Common_Tall", "Grass_Wispy_Short"], "d": 0.65, "r": 22.0, "smin": 1.3, "smax": 2.1, "hmin": 1.3, "hmax": 48.0, "slope": 42.0, "bw": [1.0, 0.8, 0.0, 0.15]},
+	{"names": ["Fern_1", "Plant_1_Big", "Plant_7_Big", "Clover_1"], "d": 0.05, "r": 36.0, "smin": 0.5, "smax": 1.0, "hmin": 1.6, "hmax": 45.0, "slope": 40.0, "forest": true, "bw": [0.4, 1.2, 0.0, 0.2]},
+	{"names": ["Flower_3_Group", "Flower_3_Single", "Flower_4_Group"], "d": 0.06, "r": 34.0, "smin": 0.9, "smax": 1.4, "hmin": 1.6, "hmax": 30.0, "slope": 30.0, "bw": [1.3, 0.2, 0.0, 0.05], "grove": 2.5},
 	{"names": ["Mushroom_Common"], "d": 0.006, "r": 40.0, "smin": 1.0, "smax": 1.8, "hmin": 1.6, "hmax": 40.0, "slope": 30.0, "forest": true, "bw": [0.1, 1.0, 0.0, 0.0]},
 	{"names": ["Pebble_Round_1", "Pebble_Round_3", "Pebble_Square_1", "Pebble_Square_3"], "d": 0.04, "r": 35.0, "smin": 0.8, "smax": 1.8, "hmin": 0.4, "hmax": 80.0, "slope": 45.0, "bw": [0.5, 0.5, 1.5, 1.2]},
 	{"names": ["Plant_1_Big", "Plant_7_Big", "Fern_1"], "d": 0.012, "r": 55.0, "smin": 0.5, "smax": 1.1, "hmin": 1.5, "hmax": 30.0, "slope": 30.0, "bw": [0.0, 0.0, 1.0, 0.0], "dry": true},
@@ -40,31 +40,60 @@ func setup(w) -> bool:
 			ok = true
 	if not ok:
 		return false
-	_update(Vector3.ZERO, 100000)
 	return true
+
+var us_budget: int = 3000
 
 func _process(delta: float) -> void:
 	_t += delta
-	if _t < 0.2:
+	if _t < 0.06:
 		return
 	_t = 0.0
 	if player == null or not is_instance_valid(player):
 		player = get_tree().get_first_node_in_group("player")
 		if player == null:
 			return
-	_update(player.global_position, 3)
+	_update(player.global_position, us_budget)
 
-func _update(center: Vector3, budget: int) -> void:
+# how many chunks around `center` are still missing
+func pending(center: Vector3) -> int:
 	var cx0: int = int(floor(center.x / CHUNK))
 	var cz0: int = int(floor(center.z / CHUNK))
 	var c2: Vector2 = Vector2(center.x, center.z)
-	var built: int = 0
+	var n: int = 0
 	for ci in ORDER:
+		var R: float = float(CATS[ci]["r"]) * Q
+		var k: int = int(ceil(R / CHUNK))
+		for dz in range(-k, k + 1):
+			for dx in range(-k, k + 1):
+				var cx: int = cx0 + dx
+				var cz: int = cz0 + dz
+				var cc: Vector2 = Vector2((float(cx) + 0.5) * CHUNK, (float(cz) + 0.5) * CHUNK)
+				if cc.distance_to(c2) > R:
+					continue
+				if not _live.has("%d|%d|%d" % [ci, cx, cz]):
+					n += 1
+	return n
+
+func build_some(center: Vector3, us: int) -> void:
+	_update(center, us)
+
+func _update(center: Vector3, us: int) -> void:
+	var t0: int = Time.get_ticks_usec()
+	var cx0: int = int(floor(center.x / CHUNK))
+	var cz0: int = int(floor(center.z / CHUNK))
+	var c2: Vector2 = Vector2(center.x, center.z)
+	var stop: bool = false
+	for ci in ORDER:
+		if stop:
+			break
 		var R: float = float(CATS[ci]["r"]) * Q
 		var n: int = int(ceil(R / CHUNK))
 		for dz in range(-n, n + 1):
+			if stop:
+				break
 			for dx in range(-n, n + 1):
-				if built >= budget:
+				if stop:
 					break
 				var cx: int = cx0 + dx
 				var cz: int = cz0 + dz
@@ -75,7 +104,8 @@ func _update(center: Vector3, budget: int) -> void:
 				if _live.has(key):
 					continue
 				_build(ci, cx, cz, key, cc)
-				built += 1
+				if Time.get_ticks_usec() - t0 > us:
+					stop = true
 	# free chunks that are far away
 	for key in _live.keys():
 		var e: Dictionary = _live[key]
@@ -106,6 +136,7 @@ func _build(ci: int, cx: int, cz: int, key: String, cc: Vector2) -> void:
 	for nm in groups.keys():
 		var arr: Array = groups[nm]
 		var md2: Array = _mesh(str(nm))
+		var fe: float = maxf(float(cat["r"]) * Q - 4.0, 6.0)
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.use_custom_data = true
@@ -114,7 +145,12 @@ func _build(ci: int, cx: int, cz: int, key: String, cc: Vector2) -> void:
 		for i in range(arr.size()):
 			var e: Array = arr[i]
 			mm.set_instance_transform(i, e[0] as Transform3D)
-			mm.set_instance_custom_data(i, e[1] as Color)
+			var tc: Color = e[1] as Color
+			if tc.a > 0.01:
+				tc.a = -fe
+			else:
+				tc.a = fe
+			mm.set_instance_custom_data(i, tc)
 		var mmi := MultiMeshInstance3D.new()
 		mmi.multimesh = mm
 		if not bool(cat.get("shadow", false)):
@@ -264,7 +300,7 @@ func _toonify(m: Mesh, nm: String) -> void:
 		_foliage_shader = load(FOLIAGE_SH) as Shader
 	if _foliage_shader == null:
 		return
-	var small: bool = nm.begins_with("Grass") or nm.begins_with("Fern") or nm.begins_with("Plant") or nm.begins_with("Clover") or nm.begins_with("Flower") or nm.begins_with("Mushroom")
+	var small: bool = nm.begins_with("Grass") or nm.begins_with("Fern") or nm.begins_with("Plant") or nm.begins_with("Clover") or nm.begins_with("Flower")
 	for i in range(m.get_surface_count()):
 		var src: Material = m.surface_get_material(i)
 		var bm: BaseMaterial3D = src as BaseMaterial3D
@@ -281,7 +317,7 @@ func _toonify(m: Mesh, nm: String) -> void:
 			thr = 0.5
 		sm.set_shader_parameter("alpha_cut", thr)
 		var sw: float = 0.0
-		if cut and small:
+		if small:
 			sw = 3.0
 		elif cut:
 			sw = 0.16
