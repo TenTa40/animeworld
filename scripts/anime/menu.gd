@@ -114,7 +114,7 @@ func _build_title() -> void:
 	_title.add_child(_grad(0.55, 0.0))
 	var bottom: TextureRect = _grad(0.0, 0.7)
 	_title.add_child(bottom)
-	var name_l: Label = _label("جزیره‌ی آرام", 112, Color(1.0, 0.93, 0.97))
+	var name_l: Label = _label("iko", 140, Color(1.0, 0.93, 0.97))
 	_title.add_child(name_l)
 	name_l.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	name_l.offset_left = -640.0
@@ -173,7 +173,7 @@ func _build_settings() -> void:
 	var vb: VBoxContainer = _vbox(_settings, 640.0)
 	vb.add_theme_constant_override("separation", 10)
 	vb.add_child(_label("تنظیمات", 70, Color(1.0, 0.93, 0.97)))
-	for key in ["shadows", "quality", "music", "sfx", "vibrate"]:
+	for key in ["shadows", "quality", "music", "sfx", "vibrate", "debug"]:
 		var b: Button = _btn("", 640.0, false)
 		b.custom_minimum_size = Vector2(640.0, 62.0)
 		b.add_theme_font_size_override("font_size", 28)
@@ -220,6 +220,7 @@ func _refresh_settings() -> void:
 	(_rows["music"] as Button).text = "موسیقی: " + _pct(SET.music)
 	(_rows["sfx"] as Button).text = "جلوه‌های صوتی: " + _pct(SET.sfx)
 	(_rows["vibrate"] as Button).text = "لرزش: " + _on_off(SET.vibrate)
+	(_rows["debug"] as Button).text = "اطلاعات فنی: " + _on_off(SET.debug)
 
 func _cycle(key: String) -> void:
 	match key:
@@ -231,6 +232,8 @@ func _cycle(key: String) -> void:
 			SET.music = _next_of([0.0, 0.3, 0.6, 1.0], SET.music)
 		"sfx":
 			SET.sfx = _next_of([0.0, 0.5, 1.0], SET.sfx)
+		"debug":
+			SET.debug = not SET.debug
 		"vibrate":
 			SET.vibrate = not SET.vibrate
 			if SET.vibrate:

@@ -66,7 +66,7 @@ func _ready() -> void:
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(bg)
-	var title: Label = _label("جزیره‌ی آرام", 96, Color(1.0, 0.93, 0.97))
+	var title: Label = _label("iko", 120, Color(1.0, 0.93, 0.97))
 	_root.add_child(title)
 	title.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	title.offset_left = -600.0

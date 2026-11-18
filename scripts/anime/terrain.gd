@@ -320,7 +320,7 @@ func _finalize(j: Job) -> void:
 	var ft: MultiMeshInstance3D = null
 	if imp_mat != null:
 		ft = _far_trees_imp(j, origin)
-	elif j.lod >= 1:
+	else:
 		ft = _far_trees(j, origin)
 	if ft != null:
 		add_child(ft)
@@ -373,7 +373,7 @@ func _tree_resources() -> void:
 
 func _far_trees(j: Job, origin: Vector3) -> MultiMeshInstance3D:
 	var counts: Array = [10, 8, 6, 4]
-	var n: int = int(counts[mini(j.lod - 1, 3)])
+	var n: int = int(counts[maxi(mini(j.lod - 1, 3), 0)])
 	var rng := RandomNumberGenerator.new()
 	rng.seed = (j.cx * 73856093) ^ (j.cz * 19349663) ^ 7771
 	var cell: float = CS / float(n)
@@ -424,7 +424,7 @@ func _far_trees(j: Job, origin: Vector3) -> MultiMeshInstance3D:
 	mmi.multimesh = mm
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mmi.position = origin
-	mmi.visibility_range_begin = 72.0
+	mmi.visibility_range_begin = 44.0 if j.lod == 0 else 72.0
 	return mmi
 
 # ------------------------------------------------------------ impostor forests (billboards of the real trees)
@@ -473,12 +473,18 @@ func _far_trees_imp(j: Job, origin: Vector3) -> MultiMeshInstance3D:
 			continue
 		if absf(_hbil(j, minf(lx + 3.0, CS), lz) - h) > 3.6:
 			continue
+		if gen.road(x, z, h) > 0.15:
+			continue
 		var cell: int = 0
 		var pink: float = 0.0
 		var bright: float = br
+		var aut: float = gen.autumn(x, z)
 		if gv > 0.5:
 			cell = 1 if r2 < 0.5 else 3
 			pink = 1.0
+		elif aut > 0.5 and w.w < 0.4 and w.z < 0.4 and r2 < 0.9:
+			cell = 1 if r2 < 0.45 else 3
+			pink = 2.0 if r2 < 0.30 else 3.0
 		elif w.w > 0.5:
 			cell = 0 if r2 < 0.5 else 2
 			bright = br * 0.88
@@ -509,3 +515,16 @@ func _far_trees_imp(j: Job, origin: Vector3) -> MultiMeshInstance3D:
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mmi.position = origin
 	return mmi
+
+func debug_text() -> String:
+	var n_mesh: int = 0
+	var n_far: int = 0
+	for k in _chunks.keys():
+		var rec: Dictionary = _chunks[k]
+		if rec.has("mi"):
+			n_mesh += 1
+		if rec.has("ft"):
+			var f: MultiMeshInstance3D = rec["ft"] as MultiMeshInstance3D
+			if f != null and is_instance_valid(f):
+				n_far += f.multimesh.instance_count
+	return "chunks %d | queue %d | far trees %d | impostor %s" % [n_mesh, _queue.size(), n_far, "on" if imp_mat != null else "off"]

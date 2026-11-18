@@ -41,6 +41,7 @@ var _player = null
 var _t: float = 0.0
 var _sb_bg: StyleBoxFlat
 var _sb_fill: StyleBoxFlat
+var debug_txt: String = ""
 var _near_t: float = 0.0
 var _near_txt: String = ""
 
@@ -463,6 +464,8 @@ func paint(c: Control) -> void:
 		c.draw_circle(b, _btn_r("burst"), Color(0, 0, 0, 0.35))
 	c.draw_string(_font, b + Vector2(-30.0 * u, 14.0 * u), "Q", HORIZONTAL_ALIGNMENT_CENTER, 60.0 * u, int(44.0 * u), white)
 	c.draw_arc(b, _btn_r("burst") + 7.0 * u, -PI * 0.5, -PI * 0.5 + TAU * ef, 48, Color(1.0, 0.85, 0.35, 1.0), 6.0 * u)
+	if debug_txt != "":
+		c.draw_string(_font, Vector2(s.x - 620.0 * u, 118.0 * u), debug_txt, HORIZONTAL_ALIGNMENT_RIGHT, 580.0 * u, int(18.0 * u), Color(1.0, 1.0, 0.6, 0.95))
 	# pause
 	var pp: Vector2 = _draw_btn(c, "pause", Color(0.2, 0.15, 0.4))
 	c.draw_rect(Rect2(pp + Vector2(-11, -13) * u, Vector2(7, 26) * u), white)

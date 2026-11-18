@@ -51,7 +51,7 @@ static func bake(host: Node, nature) -> Dictionary:
 		cam.size = side
 		cam.near = 0.1
 		cam.far = 80.0
-		cam.position = Vector3(cen.x, cen.y, cen.z + 30.0)
+		cam.position = Vector3(cen.x, cen.y, cen.z + 12.0)
 		vp.add_child(cam)
 		cam.current = true
 		vps.append(vp)
@@ -67,11 +67,22 @@ static func bake(host: Node, nature) -> Dictionary:
 			continue
 		var vp2: SubViewport = v as SubViewport
 		var img: Image = vp2.get_texture().get_image()
+		var good: bool = false
 		if img != null and not img.is_empty():
 			img.convert(Image.FORMAT_RGBA8)
-			atlas.blit_rect(img, Rect2i(0, 0, TILE, TILE), Vector2i((i % 2) * TILE, (i / 2) * TILE))
-			ok = true
-		else:
+			var opaque: int = 0
+			var total: int = 0
+			for py in range(0, img.get_height(), 8):
+				for px in range(0, img.get_width(), 8):
+					total += 1
+					if img.get_pixel(px, py).a > 0.45:
+						opaque += 1
+			good = total > 0 and float(opaque) / float(total) > 0.04
+			print("[impostor] tile ", i, " opaque ratio ", float(opaque) / float(maxi(total, 1)))
+			if good:
+				atlas.blit_rect(img, Rect2i(0, 0, TILE, TILE), Vector2i((i % 2) * TILE, (i / 2) * TILE))
+				ok = true
+		if not good:
 			info[i] = Vector3(1.0, 0.0, 0.0)
 		vp2.queue_free()
 	if not ok:

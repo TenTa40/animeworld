@@ -1,5 +1,5 @@
 extends Node3D
-# جزیره‌ی آرام — anime open-world prototype: terrain, day/night, clouds, camp, quests, menus.
+# iko — anime open-world prototype: terrain, day/night, clouds, camp, quests, menus.
 
 const TOON = preload("res://scripts/anime/toon.gd")
 const PLAYER = preload("res://scripts/anime/player.gd")
@@ -49,6 +49,7 @@ var _biome_t: float = 0.0
 var _biome_cur: String = ""
 var _ld = null
 var _inited: bool = false
+var _dbg_t: float = 0.0
 var _cloud_mat: StandardMaterial3D
 var _clouds: Array = []
 var _stars: MeshInstance3D
@@ -58,6 +59,10 @@ var _petal_night: bool = false
 var _fire_light: OmniLight3D
 var _beacon: Node3D = null
 var _kf: Array = []
+var _gov_level: int = 0
+var _gov_t: float = 0.0
+var _gov_frames: int = 0
+var _gov_low: int = 0
 
 func _ready() -> void:
 	_boot()
@@ -132,7 +137,7 @@ func _boot() -> void:
 	menu.resume_pressed.connect(_on_resume)
 	menu.restart_pressed.connect(_on_restart)
 	menu.continue_pressed.connect(_on_continue)
-	menu.settings_changed.connect(_apply_settings)
+	menu.settings_changed.connect(_on_settings_changed)
 	_spawn_crystals()
 	await _step(0.90, "آماده‌سازی جلوه‌ها...")
 	_apply_settings()
@@ -184,6 +189,15 @@ func _process(delta: float) -> void:
 		_tick = 0.2
 		_update_time()
 	_follow(delta)
+	_governor(delta)
+	_dbg_t -= delta
+	if _dbg_t <= 0.0:
+		_dbg_t = 0.5
+		if hud != null:
+			if SET.debug:
+				hud.debug_txt = _dbg_nature() + terrain.debug_text() + " | fps " + str(Engine.get_frames_per_second()) + " | gov " + str(_gov_level) + " | 3d " + str(snappedf(get_viewport().scaling_3d_scale, 0.01))
+			else:
+				hud.debug_txt = ""
 	if state == "playing":
 		game_time += delta
 		_enemy_t -= delta
@@ -210,6 +224,12 @@ func biome_vec(x: float, z: float) -> Vector4:
 
 func road_weight(_x: float, _z: float, _h: float) -> float:
 	return 0.0
+
+func road_at(x: float, z: float, h: float) -> float:
+	return terrain.gen.road(x, z, h)
+
+func autumn_at(x: float, z: float) -> float:
+	return terrain.gen.autumn(x, z)
 
 func _tex_mip(path: String) -> Texture2D:
 	if not ResourceLoader.exists(path):
@@ -780,7 +800,7 @@ func _on_start() -> void:
 	_enemy_tick()
 	tod = 0.33
 	_update_time()
-	hud.toast("به جزیره‌ی آرام خوش اومدی! ۱۰ کریستال توی چهار منطقه‌ی جزیره پنهونه؛ نقشه‌ی کوچیک جهتشون رو نشون می‌ده.", 7.0)
+	hud.toast("iko، به جزیره خوش اومدی! ۱۰ کریستال توی چهار منطقه‌ی جزیره پنهونه؛ نقشه‌ی کوچیک جهتشون رو نشون می‌ده.", 7.0)
 
 func _on_pause() -> void:
 	if state != "playing":
@@ -829,31 +849,75 @@ func _win() -> void:
 		menu.show_victory(txt)
 
 # ------------------------------------------------------------ settings
+func _on_settings_changed() -> void:
+	_gov_level = 0
+	_apply_settings()
+
+func _dbg_nature() -> String:
+	if nature != null:
+		return nature.debug_text() + " | "
+	return ""
+
+# Auto performance governor: if the game stays under ~26 fps for 6 s it lowers draw distance, plant
+# density and 3D resolution one step at a time (it never raises them again until settings are changed).
+func _governor(delta: float) -> void:
+	if state != "playing" or not SET.auto_perf:
+		return
+	_gov_t += delta
+	_gov_frames += 1
+	if _gov_t < 3.0:
+		return
+	var fps: float = float(_gov_frames) / _gov_t
+	_gov_t = 0.0
+	_gov_frames = 0
+	if fps < 26.0:
+		_gov_low += 1
+	else:
+		_gov_low = 0
+	if _gov_low >= 2 and _gov_level < 6:
+		_gov_low = 0
+		_gov_level += 1
+		_apply_settings()
+
 func _apply_settings() -> void:
 	_sun.shadow_enabled = SET.shadows
 	var vp: Viewport = get_viewport()
-	if SET.quality == 0:
+	var mobile: bool = OS.has_feature("mobile")
+	if SET.quality == 0 or _gov_level >= 2:
 		vp.msaa_3d = Viewport.MSAA_DISABLED
-	elif SET.quality == 2 and not OS.has_feature("mobile"):
+	elif SET.quality == 2 and not mobile:
 		vp.msaa_3d = Viewport.MSAA_4X
 	else:
 		vp.msaa_3d = Viewport.MSAA_2X
+	# 3D resolution (the HUD stays sharp): phones render the world a bit smaller
+	var sc: float = 1.0
+	if mobile:
+		if SET.quality == 0:
+			sc = 0.67
+		elif SET.quality == 1:
+			sc = 0.80
+		sc = maxf(sc - 0.05 * float(_gov_level), 0.5)
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+	vp.scaling_3d_scale = sc
 	_env.glow_enabled = SET.quality >= 2
 	_env.glow_intensity = 0.55
 	_env.glow_bloom = 0.12
 	_env.adjustment_enabled = SET.quality >= 2
 	_env.adjustment_saturation = 1.15
 	_env.adjustment_contrast = 1.05
+	var gq: float = maxf(1.0 - 0.09 * float(_gov_level), 0.5)
+	var gd: float = maxf(1.0 - 0.10 * float(_gov_level), 0.45)
 	if nature != null:
 		if SET.quality == 0:
-			nature.Q = 0.6
-			nature.DENSITY = 0.6
+			nature.Q = 0.6 * gq
+			nature.DENSITY = 0.6 * gd
 		elif SET.quality == 1:
-			nature.Q = 0.8
-			nature.DENSITY = 0.85
+			nature.Q = 0.8 * gq
+			nature.DENSITY = 0.85 * gd
 		else:
-			nature.Q = 1.0
-			nature.DENSITY = 1.0
+			nature.Q = 1.0 * gq
+			nature.DENSITY = 1.0 * gd
+		nature.refresh()
 	if terrain != null:
 		var qf: float = 1.0
 		if SET.quality == 0:
@@ -864,9 +928,15 @@ func _apply_settings() -> void:
 			qf = 0.8
 		else:
 			terrain.dist_scale = 1.0
+		terrain.dist_scale *= gq
 		if terrain.imp_mat != null:
-			terrain.imp_mat.set_shader_parameter("fade_in_start", 62.0 * qf * 0.60)
-			terrain.imp_mat.set_shader_parameter("fade_in_end", 62.0 * qf * 0.94)
+			if nature != null:
+				var tf: Vector2 = nature.tree_fade()
+				terrain.imp_mat.set_shader_parameter("fade_in_start", tf.x)
+				terrain.imp_mat.set_shader_parameter("fade_in_end", tf.y)
+			else:
+				terrain.imp_mat.set_shader_parameter("fade_in_start", 62.0 * qf * 0.60)
+				terrain.imp_mat.set_shader_parameter("fade_in_end", 62.0 * qf * 0.94)
 		if player != null:
 			terrain.update(player.global_position)
 		else:

@@ -38,7 +38,14 @@ void fragment() {
 	vec3 col = t.rgb;
 	if (cd.y > 0.5) {
 		float lum = dot(col, vec3(0.30, 0.59, 0.11));
-		col = mix(col, vec3(1.0, 0.70, 0.84) * lum * 2.3, 0.85);
+		vec3 tc = vec3(1.0, 0.70, 0.84);
+		if (cd.y > 1.5) {
+			tc = vec3(1.0, 0.56, 0.16);
+		}
+		if (cd.y > 2.5) {
+			tc = vec3(1.0, 0.80, 0.24);
+		}
+		col = mix(col, tc * lum * 2.3, 0.85);
 	}
 	ALBEDO = col * cd.z * light_tint;
 }

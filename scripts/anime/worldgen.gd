@@ -12,7 +12,14 @@ var n_dune := FastNoiseLite.new()
 var n_ridge := FastNoiseLite.new()
 var n_col := FastNoiseLite.new()
 var n_forest := FastNoiseLite.new()
+var n_path := FastNoiseLite.new()
+var n_gate := FastNoiseLite.new()
+var n_aut := FastNoiseLite.new()
 var lakes: Array = []
+
+# dirt roads: the zero line of a smooth noise field makes long winding paths (width in noise units)
+const PATH_IN := 0.035    # noise value where a road is fully dirt (~1.6 m from its centre line)
+const PATH_OUT := 0.075   # noise value where the road ends (~3.3 m from its centre line)
 
 func _init() -> void:
 	_setup(n_warp, 0.004, 2, 11)
@@ -22,6 +29,9 @@ func _init() -> void:
 	_setup(n_ridge, 0.0045, 4, 41)
 	_setup(n_col, 0.05, 1, 53)
 	_setup(n_forest, 0.014, 2, 99)
+	_setup(n_path, 0.0052, 2, 61)
+	_setup(n_gate, 0.0028, 1, 67)
+	_setup(n_aut, 0.0065, 2, 73)
 	# x, z, radius, depth
 	lakes = [Vector4(-250.0, 48.0, 72.0, 8.0), Vector4(84.0, 282.0, 54.0, 7.0), Vector4(306.0, 12.0, 34.0, 5.0), Vector4(-84.0, -150.0, 50.0, 7.0)]
 
@@ -47,6 +57,23 @@ func grove(x: float, z: float) -> float:
 
 func forest(x: float, z: float) -> float:
 	return n_forest.get_noise_2d(x, z) * 0.5 + 0.5
+
+# 0..1: how much of a dirt road is at this spot (0 = none). Roads fade out in mountains and near water.
+func path(x: float, z: float) -> float:
+	var n: float = absf(n_path.get_noise_2d(x, z))
+	if n > PATH_OUT:
+		return 0.0
+	var band: float = 1.0 - smoothstep(PATH_IN, PATH_OUT, n)
+	var gate: float = smoothstep(-0.18, 0.12, n_gate.get_noise_2d(x + 300.0, z - 200.0))
+	return clampf(band * gate, 0.0, 1.0)
+
+# road weight with the same height limits the ground colour uses (no roads on snow, in water or on the beach)
+func road(x: float, z: float, h: float) -> float:
+	return path(x, z) * (1.0 - smoothstep(34.0, 52.0, h)) * smoothstep(1.0, 2.2, h)
+
+# 0..1: patches of autumn-coloured trees (orange / yellow like the reference image)
+func autumn(x: float, z: float) -> float:
+	return smoothstep(0.30, 0.52, n_aut.get_noise_2d(x, z) * 0.5 + 0.5)
 
 func height(x: float, z: float) -> float:
 	var w: Vector4 = masks(x, z)
@@ -77,10 +104,11 @@ func height(x: float, z: float) -> float:
 func color(x: float, z: float, h: float, ny: float) -> Color:
 	var w: Vector4 = masks(x, z)
 	var c: float = n_col.get_noise_2d(x, z) * 0.5 + 0.5
-	var g_plain: Color = Color(0.50, 0.80, 0.28).lerp(Color(0.72, 0.92, 0.34), c)
-	var g_forest: Color = Color(0.16, 0.46, 0.22).lerp(Color(0.24, 0.58, 0.24), c)
-	var sand: Color = Color(0.93, 0.74, 0.44).lerp(Color(0.86, 0.58, 0.34), c)
-	var rock: Color = Color(0.50, 0.48, 0.54).lerp(Color(0.64, 0.60, 0.62), c)
+	var g_plain: Color = Color(0.44, 0.78, 0.20).lerp(Color(0.66, 0.90, 0.25), c)
+	g_plain = g_plain.lerp(Color(0.82, 0.76, 0.30), smoothstep(0.68, 0.95, c) * 0.55)
+	var g_forest: Color = Color(0.20, 0.52, 0.20).lerp(Color(0.30, 0.64, 0.22), c)
+	var sand: Color = Color(0.97, 0.80, 0.48).lerp(Color(0.90, 0.64, 0.36), c)
+	var rock: Color = Color(0.52, 0.50, 0.55).lerp(Color(0.66, 0.62, 0.64), c)
 	var m_low: Color = g_forest.lerp(rock, smoothstep(28.0, 48.0, h))
 	var col: Color = g_plain * w.x + g_forest * w.y + sand * w.z + m_low * w.w
 	var grass_amt: float = w.x + w.y + w.w * (1.0 - smoothstep(28.0, 48.0, h))
@@ -98,6 +126,13 @@ func color(x: float, z: float, h: float, ny: float) -> Color:
 	var snow: float = smoothstep(snow_line - 6.0, snow_line + 6.0, h) * smoothstep(0.50, 0.72, ny)
 	col = col.lerp(Color(0.96, 0.97, 1.0), snow)
 	grass_amt *= (1.0 - snow)
+	# dirt roads (sandy and pale in the desert)
+	var pa: float = road(x, z, h)
+	if pa > 0.0:
+		var dirt: Color = Color(0.80, 0.60, 0.34).lerp(Color(0.97, 0.84, 0.58), w.z)
+		dirt = dirt.lerp(Color(0.70, 0.52, 0.30), c * 0.5)
+		col = col.lerp(dirt, pa * 0.92)
+		grass_amt *= (1.0 - pa)
 	# beaches and lake shores
 	var beach: float = 1.0 - smoothstep(0.6, 1.9, h)
 	col = col.lerp(Color(0.96, 0.90, 0.70), beach)
