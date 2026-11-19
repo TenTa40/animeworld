@@ -30,6 +30,7 @@ const LOOPS: Array = ["Idle_No_Loop", "Walk_Carry_Loop", "NinjaJump_Idle_Loop", 
 const GRIP_POS := Vector3(0.0, 0.08, 0.0)
 
 var loaded: bool = false
+var fail: String = ""
 var run: float = 0.0
 var airborne: bool = false
 var gliding: bool = false
@@ -76,28 +77,57 @@ func _box(x: float, y: float, z: float) -> BoxMesh:
 	m.size = Vector3(x, y, z)
 	return m
 
+func _fail(msg: String) -> bool:
+	fail = msg
+	push_warning("hero_rig: " + msg)
+	return false
+
+func _load_scene() -> Node3D:
+	if ResourceLoader.exists(GLB):
+		var ps: PackedScene = load(GLB) as PackedScene
+		if ps != null:
+			var inst: Node = ps.instantiate()
+			if inst is Node3D:
+				fail = ""
+				return inst as Node3D
+			if inst != null:
+				inst.free()
+	# fallback: parse the raw .glb at runtime (shipped through export include_filter)
+	if FileAccess.file_exists(GLB):
+		var doc := GLTFDocument.new()
+		var st := GLTFState.new()
+		var err: int = doc.append_from_file(GLB, st)
+		if err == OK:
+			var n: Node = doc.generate_scene(st)
+			if n is Node3D:
+				fail = "runtime-gltf"
+				return n as Node3D
+			if n != null:
+				n.free()
+		else:
+			fail = "gltf parse err " + str(err)
+	return null
+
 func _build() -> bool:
-	if not ResourceLoader.exists(GLB) or not ResourceLoader.exists(SH_BODY) or not ResourceLoader.exists(SH_OUT):
-		return false
-	var ps: PackedScene = load(GLB) as PackedScene
-	if ps == null:
-		return false
-	var inst: Node = ps.instantiate()
-	_model = inst as Node3D
+	if not ResourceLoader.exists(SH_BODY) or not ResourceLoader.exists(SH_OUT):
+		return _fail("shader missing")
+	_model = _load_scene()
 	if _model == null:
-		if inst != null:
-			inst.free()
-		return false
+		return _fail("glb not loadable " + fail)
 	var sk: Array = _model.find_children("*", "Skeleton3D", true, false)
 	_ap = _model.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	var mis: Array = _model.find_children("*", "MeshInstance3D", true, false)
-	if sk.is_empty() or _ap == null or mis.is_empty():
-		_model.free()
-		return false
+	if sk.is_empty():
+		return _fail("no skeleton")
+	if _ap == null:
+		return _fail("no AnimationPlayer")
+	if mis.is_empty():
+		return _fail("no mesh")
 	_skel = sk[0] as Skeleton3D
-	if _skel == null or _skel.find_bone("hand_r") < 0 or not _ap.has_animation(CLIP_IDLE) or not _ap.has_animation(CLIP_RUN):
-		_model.free()
-		return false
+	if _skel == null or _skel.find_bone("hand_r") < 0:
+		return _fail("no hand_r bone")
+	if not _ap.has_animation(CLIP_IDLE) or not _ap.has_animation(CLIP_RUN):
+		return _fail("clips missing: " + str(_ap.get_animation_list()))
 	_mat = ShaderMaterial.new()
 	_mat.shader = load(SH_BODY) as Shader
 	var om := ShaderMaterial.new()

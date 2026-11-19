@@ -48,17 +48,36 @@ var _swim: bool = false
 var _swim_fx: float = 0.0
 
 # iko's own model when its data file is there and loads; otherwise the procedural hero
+var _hero_msg: String = ""
+
 func _make_hero() -> Node3D:
 	for path: String in ["res://scripts/anime/hero_rig.gd", "res://scripts/anime/hero_iko.gd"]:
-		if ResourceLoader.exists(path):
-			var sc: GDScript = load(path) as GDScript
-			if sc != null:
-				var h: Node3D = sc.new() as Node3D
-				if h != null:
-					if bool(h.get("loaded")):
-						return h
-					h.free()
+		if not ResourceLoader.exists(path):
+			_hero_msg += path.get_file() + ": missing\n"
+			continue
+		var sc: GDScript = load(path) as GDScript
+		if sc == null or not sc.can_instantiate():
+			_hero_msg += path.get_file() + ": script error\n"
+			continue
+		var h: Node3D = sc.new() as Node3D
+		if h != null:
+			if bool(h.get("loaded")):
+				_hero_msg += path.get_file() + ": OK " + String(h.get("fail"))
+				return h
+			_hero_msg += path.get_file() + ": FAIL " + String(h.get("fail")) + "\n"
+			h.free()
 	return HERO.new()
+
+func _show_hero_msg() -> void:
+	var cl := CanvasLayer.new()
+	cl.layer = 100
+	var lb := Label.new()
+	lb.text = _hero_msg
+	lb.position = Vector2(12.0, 90.0)
+	lb.add_theme_font_size_override("font_size", 22)
+	cl.add_child(lb)
+	add_child(cl)
+	get_tree().create_timer(12.0).timeout.connect(cl.queue_free)
 
 func _ready() -> void:
 	add_to_group("player")
@@ -76,6 +95,7 @@ func _ready() -> void:
 	_hero = _make_hero()
 	_hero.scale = Vector3(0.95, 0.95, 0.95)
 	add_child(_hero)
+	_show_hero_msg()
 	_shadow = FX.blob(self, 0.6)
 	_shadow.top_level = true
 	_rig = Node3D.new()
