@@ -62,9 +62,9 @@ func _make_hero() -> Node3D:
 		var h: Node3D = sc.new() as Node3D
 		if h != null:
 			if bool(h.get("loaded")):
-				_hero_msg += path.get_file() + ": OK " + String(h.get("fail"))
+				_hero_msg += path.get_file() + ": OK " + str(h.get("fail"))
 				return h
-			_hero_msg += path.get_file() + ": FAIL " + String(h.get("fail")) + "\n"
+			_hero_msg += path.get_file() + ": FAIL " + str(h.get("fail")) + "\n"
 			h.free()
 	return HERO.new()
 
