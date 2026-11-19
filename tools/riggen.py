@@ -269,6 +269,27 @@ for nm in KEEP:
         chans.append((nidx[tn], c["target"]["path"], t, v, sm.get("interpolation", "LINEAR")))
     anims.append((nm, chans))
 
+RUN_FBX = sys.argv[sys.argv.index("--run") + 1] if "--run" in sys.argv else None
+if RUN_FBX:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import retarget_mx
+    pj = []
+    for k in J:
+        pn = parent.get(k)
+        pj.append(J.index(pn) if pn in J else -1)
+    rest_loc_R = np.array([node_local(nodes[k])[:3, :3] for k in J])
+    rest_par_R = np.array([(np.eye(3) if k not in parent else gmat(parent[k])[:3, :3]) for k in J])
+    tm, rq, tr = retarget_mx.retarget(RUN_FBX, J, jname, pj, G, rest_loc_R, rest_par_R, float(P[jidx["pelvis"]][1]))
+    rchans = []
+    for j, k in enumerate(J):
+        rchans.append((k, "rotation", tm.astype(np.float32), rq[:, j].astype(np.float32), "LINEAR"))
+    pel = jidx["pelvis"]
+    Gpar = G[jidx["root"]]
+    loc_t = np.array([(np.linalg.inv(Gpar) @ np.append(P[pel] + d, 1))[:3] for d in tr], dtype=np.float32)
+    rchans.append((J[pel], "translation", tm.astype(np.float32), loc_t, "LINEAR"))
+    anims.append(("Run", rchans))
+    print("added clip Run", len(tm), "frames")
+
 
 def sample(chans, tm):
     loc = {}
@@ -314,8 +335,8 @@ def skin_pts(Gx):
 if PREVIEW:
     import PIL.Image as I
     os.makedirs(PREVIEW, exist_ok=True)
-    shots = [("A_TPose", 0.0), ("Idle_No_Loop", 0.5), ("Walk_Carry_Loop", 0.3), ("Sword_Regular_A", 0.2),
-             ("Sword_Regular_B", 0.25), ("Sword_Heavy_Combo", 1.0), ("NinjaJump_Idle_Loop", 0.5), ("Sword_Dash", 0.5)]
+    shots = [("Run", 0.0), ("Run", 0.1), ("Run", 0.2), ("Run", 0.3), ("Run", 0.4), ("Run", 0.5), ("Run", 0.6), ("Run", 0.75)] if os.environ.get("PVRUN") else [("A_TPose", 0.0), ("Idle_No_Loop", 0.5), ("Walk_Carry_Loop", 0.3), ("Sword_Regular_A", 0.2),
+             ("Sword_Regular_B", 0.25), ("Sword_Heavy_Combo", 1.0), ("NinjaJump_Idle_Loop", 0.5), ("Sword_Dash", 0.5), ("Run", 0.3)]
     cd = dict(anims)
     Wd, Hd = 260, 400
     img = np.zeros((Hd * 2, Wd * 4, 3), np.uint8)
@@ -323,7 +344,7 @@ if PREVIEW:
         Pq = skin_pts(pose_mats(sample(cd[nm], tm)))
         ox, oy = (si % 4) * Wd, (si // 4) * Hd
         for ax, off in ((0, 0), ):
-            px = ((Pq[:, 0] + 1.0) / 2.0 * (Wd - 2)).astype(int)
+            px = ((Pq[:, int(os.environ.get('PVAX', '0'))] + 1.0) / 2.0 * (Wd - 2)).astype(int)
             py = (Hd - 1 - (Pq[:, 1] + 0.1) / 2.1 * (Hd - 1)).astype(int)
             ok = (px >= 0) & (px < Wd - 1) & (py >= 1) & (py < Hd)
             c8 = np.clip(np.power(col, 0.6) * 255 * 1.6, 0, 255).astype(np.uint8)

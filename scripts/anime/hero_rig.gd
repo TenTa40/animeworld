@@ -16,7 +16,7 @@ const OUTFIT := Color(0.97, 0.97, 1.0)
 
 # game state -> clip names (change here when other clips are added to the GLB)
 const CLIP_IDLE := "Idle_No"
-const CLIP_RUN := "__run"      # procedural (no run clip in UAL2)
+const CLIP_RUN := "__run"      # procedural fallback when the "Run" clip (Mixamo, retargeted by riggen) is missing
 const CLIP_JUMP := "NinjaJump_Start"
 const CLIP_AIR := "NinjaJump_Idle"
 const CLIP_GLIDE := "NinjaJump_Idle"
@@ -25,7 +25,7 @@ const CLIP_CAST := "Sword_Dash"
 const CLIPS_ATK: Array = ["Sword_Regular_A", "Sword_Regular_B", "Sword_Regular_C"]
 const ATK_SPEED: Array = [1.25, 1.3, 2.1]
 const ATK_TIME: Array = [0.36, 0.42, 0.62]
-const LOOPS: Array = ["Idle_No", "Walk_Carry", "NinjaJump_Idle", "Idle_FoldArms", "Slide", "Zombie_Walk_Fwd", "Idle_Shield"]
+const LOOPS: Array = ["Run", "Idle_No", "Walk_Carry", "NinjaJump_Idle", "Idle_FoldArms", "Slide", "Zombie_Walk_Fwd", "Idle_Shield"]
 # blade direction in the hand_r bone frame (measured from the UAL2 sword clips)
 const GRIP_POS := Vector3(0.0, 0.08, 0.0)
 
@@ -44,6 +44,7 @@ var _slash_t: float = 9.0
 var _air_t: float = 0.0
 var _cur: String = ""
 var _phase: float = 0.0
+var _clip_run: String = "__run"
 var _bi: Dictionary = {}
 var _pivot: Node3D
 var _model: Node3D
@@ -184,6 +185,8 @@ func _build() -> bool:
 	add_child(_slash)
 	for bn: String in ["pelvis", "spine_01", "spine_02", "spine_03", "neck_01", "Head", "clavicle_l", "clavicle_r", "upperarm_l", "upperarm_r", "lowerarm_l", "lowerarm_r", "thigh_l", "thigh_r", "calf_l", "calf_r", "foot_l", "foot_r"]:
 		_bi[bn] = _skel.find_bone(bn)
+	if _ap.has_animation("Run"):
+		_clip_run = "Run"
 	_play(CLIP_IDLE, 0.0, 1.0)
 	return true
 
@@ -321,11 +324,13 @@ func _process(delta: float) -> void:
 		else:
 			_play(CLIP_AIR, 0.25, 1.0)
 	elif run > 0.12:
-		_play(CLIP_RUN, 0.15, 1.0)
+		_play(_clip_run, 0.15, 1.0)
+		if _clip_run == "Run":
+			_ap.speed_scale = 0.8 + 0.7 * clampf(run, 0.0, 1.2)
 		lean = 0.0
 	else:
 		_play(CLIP_IDLE, 0.25, 1.0)
-	if _cur == CLIP_RUN and not (casting or attacking or hurt) and not airborne and not gliding:
+	if _cur == CLIP_RUN and _clip_run == CLIP_RUN and not (casting or attacking or hurt) and not airborne and not gliding:
 		_run_pose(delta)
 	else:
 		_model.position.y = -HIP_Y
