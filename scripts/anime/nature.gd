@@ -8,7 +8,7 @@ extends Node3D
 # (trees: dithered dissolve, grass: size envelope). Beyond TREE_R the terrain draws impostor billboards.
 
 const DIR := "res://assets/nature/"
-const TREE_R := 112.0
+const TREE_R := 140.0
 const FOLIAGE_SH := "res://shaders/anime/foliage.gdshader"
 const GRASS_SH := "res://shaders/anime/grass.gdshader"
 # model-name prefix -> distance range [a, b] where the near model hands over to the far model
@@ -18,7 +18,7 @@ const FADES := {
 	"TwistedTree": Vector2(40.0, 50.0),
 	"DeadTree": Vector2(40.0, 50.0),
 	"Bush": Vector2(22.0, 30.0),
-	"Grass": Vector2(9.0, 15.0),
+	"Grass": Vector2(12.0, 19.0),
 }
 
 var Q: float = 1.0
@@ -80,25 +80,25 @@ func _make_cats() -> void:
 	# 6,7 dead trees (desert and rocky slopes)
 	_pair({"gid": 3, "names": ["DeadTree_5", "DeadTree_2"], "d": 0.0016, "r": TREE_R, "smin": 0.7, "smax": 1.1, "hmin": 1.8, "hmax": 55.0, "slope": 30.0, "collide": true, "rmin": 12.0, "bw": [0.0, 0.0, 1.0, 0.25], "kind": "tree"}, "DeadTree")
 	# 8,9 bushes
-	_pair({"gid": 4, "names": ["Bush_Common", "Bush_Common_Flowers"], "d": 0.008, "r": 84.0, "smin": 0.8, "smax": 1.5, "hmin": 1.6, "hmax": 45.0, "slope": 35.0, "forest": true, "rmin": 6.0, "bw": [0.8, 1.0, 0.2, 0.15], "kind": "bush", "cs": 24.0}, "Bush")
-	# 10 grass, near tufts (full model)
-	CATS.append({"gid": 5, "names": ["Grass_Common_Short", "Grass_Common_Short", "Grass_Common_Tall", "Grass_Wispy_Short"], "d": 0.75, "r": 28.0, "cs": 16.0, "qs": false, "mode": 1, "smin": 0.8, "smax": 1.25, "hmin": 1.3, "hmax": 48.0, "slope": 42.0, "bw": [1.0, 0.8, 0.0, 0.15], "kind": "grass", "pthr": 0.35, "warm": 0.18})
-	# 11 grass, far tufts (fewer, bigger, lighter model)
-	CATS.append({"gid": 6, "names": ["Grass_Common_Short", "Grass_Common_Tall", "Grass_Wispy_Short", "Grass_Wispy_Tall"], "suffix": "_L", "d": 0.28, "r": 58.0, "rin": 0.0, "cs": 24.0, "qs": true, "mode": 2, "smin": 1.5, "smax": 2.2, "hmin": 1.3, "hmax": 48.0, "slope": 42.0, "bw": [1.0, 0.8, 0.0, 0.15], "kind": "grass", "pthr": 0.35, "warm": 0.18})
+	_pair({"gid": 4, "names": ["Bush_Common", "Bush_Common_Flowers"], "d": 0.008, "r": 110.0, "smin": 0.6, "smax": 1.0, "hmin": 1.6, "hmax": 45.0, "slope": 35.0, "forest": true, "rmin": 6.0, "bw": [0.8, 1.0, 0.2, 0.15], "kind": "bush", "cs": 24.0}, "Bush")
+	# 10 grass, near tufts (full model, small and dense)
+	CATS.append({"gid": 5, "names": ["Grass_Common_Short", "Grass_Common_Short", "Grass_Wispy_Short", "Grass_Common_Short"], "d": 1.4, "r": 26.0, "cs": 8.0, "qs": false, "mode": 1, "smin": 0.28, "smax": 0.44, "hmin": 1.3, "hmax": 48.0, "slope": 42.0, "bw": [1.0, 0.8, 0.0, 0.15], "kind": "grass", "pthr": 0.35, "warm": 0.06})
+	# 11 grass, far tufts (fewer, a bit bigger, lighter model), reaches far out
+	CATS.append({"gid": 6, "names": ["Grass_Common_Short", "Grass_Wispy_Short", "Grass_Common_Tall", "Grass_Common_Short"], "suffix": "_L", "d": 0.30, "r": 85.0, "rin": 0.0, "cs": 24.0, "qs": true, "mode": 2, "smin": 0.30, "smax": 0.46, "hmin": 1.3, "hmax": 48.0, "slope": 42.0, "bw": [1.0, 0.8, 0.0, 0.15], "kind": "grass", "pthr": 0.35, "warm": 0.06})
 	# 12 ferns and leafy plants
-	CATS.append({"gid": 7, "names": ["Fern_1", "Plant_1_Big", "Plant_7_Big", "Clover_1"], "d": 0.05, "r": 44.0, "cs": 24.0, "qs": true, "smin": 0.5, "smax": 1.0, "hmin": 1.6, "hmax": 45.0, "slope": 40.0, "forest": true, "bw": [0.4, 1.2, 0.0, 0.2], "kind": "small"})
+	CATS.append({"gid": 7, "names": ["Fern_1", "Plant_1_Big", "Plant_7_Big", "Clover_1"], "d": 0.05, "r": 50.0, "cs": 24.0, "qs": true, "smin": 0.20, "smax": 0.42, "hmin": 1.6, "hmax": 45.0, "slope": 40.0, "forest": true, "bw": [0.4, 1.2, 0.0, 0.2], "kind": "small"})
 	# 13 flowers
-	CATS.append({"gid": 8, "names": ["Flower_3_Group", "Flower_3_Single", "Flower_4_Group", "Flower_4_Single"], "d": 0.07, "r": 42.0, "cs": 24.0, "qs": true, "smin": 0.7, "smax": 1.15, "hmin": 1.6, "hmax": 30.0, "slope": 30.0, "bw": [1.3, 0.2, 0.0, 0.05], "grove": 2.5, "kind": "small"})
+	CATS.append({"gid": 8, "names": ["Flower_3_Group", "Flower_3_Single", "Flower_4_Group", "Flower_4_Single"], "d": 0.10, "r": 50.0, "cs": 24.0, "qs": true, "smin": 0.20, "smax": 0.36, "hmin": 1.6, "hmax": 30.0, "slope": 30.0, "bw": [1.3, 0.2, 0.0, 0.05], "grove": 2.5, "kind": "small"})
 	# 14 mushrooms
-	CATS.append({"gid": 9, "names": ["Mushroom_Common"], "d": 0.006, "r": 40.0, "cs": 32.0, "qs": true, "smin": 1.0, "smax": 1.8, "hmin": 1.6, "hmax": 40.0, "slope": 30.0, "forest": true, "bw": [0.1, 1.0, 0.0, 0.0], "kind": "rock"})
+	CATS.append({"gid": 9, "names": ["Mushroom_Common"], "d": 0.006, "r": 40.0, "cs": 32.0, "qs": true, "smin": 0.5, "smax": 1.0, "hmin": 1.6, "hmax": 40.0, "slope": 30.0, "forest": true, "bw": [0.1, 1.0, 0.0, 0.0], "kind": "rock"})
 	# 15 rocks
-	CATS.append({"gid": 10, "names": ["Rock_Medium_1", "Rock_Medium_2", "Rock_Medium_3"], "d": 0.0035, "r": 120.0, "cs": 48.0, "qs": true, "smin": 0.7, "smax": 1.8, "hmin": 0.8, "hmax": 200.0, "slope": 70.0, "collide": true, "rmin": 10.0, "bw": [0.4, 0.5, 1.4, 2.2], "kind": "rock"})
+	CATS.append({"gid": 10, "names": ["Rock_Medium_1", "Rock_Medium_2", "Rock_Medium_3"], "d": 0.0035, "r": 160.0, "cs": 48.0, "qs": true, "smin": 0.5, "smax": 1.3, "hmin": 0.8, "hmax": 200.0, "slope": 70.0, "collide": true, "rmin": 10.0, "bw": [0.4, 0.5, 1.4, 2.2], "kind": "rock"})
 	# 16 loose pebbles
-	CATS.append({"gid": 11, "names": ["Pebble_Round_1", "Pebble_Round_3", "Pebble_Square_1", "Pebble_Square_3"], "d": 0.04, "r": 36.0, "cs": 24.0, "qs": true, "smin": 0.8, "smax": 1.8, "hmin": 0.4, "hmax": 80.0, "slope": 45.0, "bw": [0.5, 0.5, 1.5, 1.2], "kind": "rock"})
+	CATS.append({"gid": 11, "names": ["Pebble_Round_1", "Pebble_Round_3", "Pebble_Square_1", "Pebble_Square_3"], "d": 0.04, "r": 36.0, "cs": 24.0, "qs": true, "smin": 0.4, "smax": 0.9, "hmin": 0.4, "hmax": 80.0, "slope": 45.0, "bw": [0.5, 0.5, 1.5, 1.2], "kind": "rock"})
 	# 17 stones lining the dirt roads
-	CATS.append({"gid": 12, "names": ["Pebble_Round_5", "Pebble_Square_5", "Pebble_Round_3", "Pebble_Square_1", "Pebble_Square_3"], "d": 0.55, "r": 46.0, "cs": 24.0, "qs": true, "smin": 0.9, "smax": 2.0, "hmin": 1.0, "hmax": 60.0, "slope": 40.0, "bw": [0.8, 0.8, 1.2, 0.5], "kind": "rock", "path": 1})
+	CATS.append({"gid": 12, "names": ["Pebble_Round_5", "Pebble_Square_5", "Pebble_Round_3", "Pebble_Square_1", "Pebble_Square_3"], "d": 0.22, "r": 46.0, "cs": 24.0, "qs": true, "smin": 0.35, "smax": 0.8, "hmin": 1.0, "hmax": 60.0, "slope": 40.0, "bw": [0.8, 0.8, 1.2, 0.5], "kind": "rock", "path": 1})
 	# 18 dry plants in the desert
-	CATS.append({"gid": 13, "names": ["Plant_1_Big", "Plant_7_Big", "Fern_1"], "d": 0.012, "r": 55.0, "cs": 32.0, "qs": true, "smin": 0.5, "smax": 1.1, "hmin": 1.5, "hmax": 30.0, "slope": 30.0, "bw": [0.0, 0.0, 1.0, 0.0], "dry": true, "kind": "small"})
+	CATS.append({"gid": 13, "names": ["Plant_1_Big", "Plant_7_Big", "Fern_1"], "d": 0.012, "r": 55.0, "cs": 32.0, "qs": true, "smin": 0.18, "smax": 0.4, "hmin": 1.5, "hmax": 30.0, "slope": 30.0, "bw": [0.0, 0.0, 1.0, 0.0], "dry": true, "kind": "small"})
 	# build order: what is right around you first
 	ORDER = [10, 11, 13, 12, 17, 16, 8, 14, 0, 2, 15, 4, 6, 18, 9, 1, 3, 5, 7]
 	for i in range(CATS.size()):
@@ -377,8 +377,9 @@ func _gen(ci: int, cx: int, cz: int) -> Array:
 			elif w.y > 0.5:
 				tint = Color(vv * 0.86, vv * 0.97, vv * 0.84, 0.0)
 		elif kind == "grass":
+			tint = Color(vv * 0.80, vv, vv * 0.68, 0.0)
 			if w.y > 0.5:
-				tint = Color(vv * 0.80, vv * 0.95, vv * 0.80, 0.0)
+				tint = Color(vv * 0.65, vv * 0.92, vv * 0.65, 0.0)
 			elif extra < warm:
 				tint = Color(1.0, 0.92, 0.55, 0.0)
 		out.append({"n": base_nm + suffix, "p": Vector3(x, h - 0.05, z), "s": s, "b": b, "t": tint})

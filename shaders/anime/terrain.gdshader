@@ -8,7 +8,7 @@ uniform float stone_scale = 0.2;
 uniform float relief = 2.4;
 uniform float shade_threshold = 0.12;
 uniform vec3 shadow_tint = vec3(0.18, 0.16, 0.32);
-uniform float sat = 1.12;
+uniform float sat = 1.0;
 
 varying vec4 vc;
 varying vec3 wpos;
@@ -54,7 +54,7 @@ void fragment() {
 	float blotch = texture(grass_tex, wpos.xz * 0.0045).g;
 	float pv = 0.90 + 0.20 * blotch;
 
-	vec3 col = vc.rgb * (0.50 + d * 1.05) * mix(1.0, strata, rocky) * pv;
+	vec3 col = vc.rgb * (0.58 + d * 0.80) * mix(1.0, strata, rocky) * pv;
 	col = mix(col, vc.rgb * (0.92 + rip * 0.16) * pv, sandy * 0.75);
 	float l = dot(col, vec3(0.30, 0.59, 0.11));
 	ALBEDO = mix(vec3(l), col, sat);

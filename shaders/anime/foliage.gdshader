@@ -9,7 +9,7 @@ uniform float alpha_cut = 0.5;
 uniform float sway = 0.0;
 uniform float ao_h = 0.0;          // height (model units) over which the base darkening fades out (0 = off)
 uniform float ao_min = 0.70;
-uniform float sat = 1.18;
+uniform float sat = 1.05;
 uniform float shade_threshold = 0.10;
 uniform vec3 shadow_tint = vec3(0.20, 0.20, 0.38);
 // near/far model cross-fade: mode 1 = fades OUT between a and b, mode 2 = fades IN between a and b

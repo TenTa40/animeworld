@@ -47,6 +47,18 @@ var _step_t: float = 0.0
 var _swim: bool = false
 var _swim_fx: float = 0.0
 
+# iko's own model when its data file is there and loads; otherwise the procedural hero
+func _make_hero() -> Node3D:
+	if ResourceLoader.exists("res://scripts/anime/hero_iko.gd"):
+		var sc: GDScript = load("res://scripts/anime/hero_iko.gd") as GDScript
+		if sc != null:
+			var h: Node3D = sc.new() as Node3D
+			if h != null:
+				if bool(h.get("loaded")):
+					return h
+				h.free()
+	return HERO.new()
+
 func _ready() -> void:
 	add_to_group("player")
 	collision_layer = 2
@@ -60,7 +72,7 @@ func _ready() -> void:
 	cs.shape = cap
 	cs.position = Vector3(0.0, 0.85, 0.0)
 	add_child(cs)
-	_hero = HERO.new()
+	_hero = _make_hero()
 	_hero.scale = Vector3(0.95, 0.95, 0.95)
 	add_child(_hero)
 	_shadow = FX.blob(self, 0.6)

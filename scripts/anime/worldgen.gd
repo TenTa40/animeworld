@@ -18,8 +18,8 @@ var n_aut := FastNoiseLite.new()
 var lakes: Array = []
 
 # dirt roads: the zero line of a smooth noise field makes long winding paths (width in noise units)
-const PATH_IN := 0.035    # noise value where a road is fully dirt (~1.6 m from its centre line)
-const PATH_OUT := 0.075   # noise value where the road ends (~3.3 m from its centre line)
+const PATH_IN := 0.028    # noise value where a road is fully dirt (~1.6 m from its centre line)
+const PATH_OUT := 0.062   # noise value where the road ends (~3.3 m from its centre line)
 
 func _init() -> void:
 	_setup(n_warp, 0.004, 2, 11)
@@ -73,7 +73,7 @@ func road(x: float, z: float, h: float) -> float:
 
 # 0..1: patches of autumn-coloured trees (orange / yellow like the reference image)
 func autumn(x: float, z: float) -> float:
-	return smoothstep(0.30, 0.52, n_aut.get_noise_2d(x, z) * 0.5 + 0.5)
+	return smoothstep(0.54, 0.72, n_aut.get_noise_2d(x, z) * 0.5 + 0.5)
 
 func height(x: float, z: float) -> float:
 	var w: Vector4 = masks(x, z)
@@ -104,9 +104,9 @@ func height(x: float, z: float) -> float:
 func color(x: float, z: float, h: float, ny: float) -> Color:
 	var w: Vector4 = masks(x, z)
 	var c: float = n_col.get_noise_2d(x, z) * 0.5 + 0.5
-	var g_plain: Color = Color(0.44, 0.78, 0.20).lerp(Color(0.66, 0.90, 0.25), c)
-	g_plain = g_plain.lerp(Color(0.82, 0.76, 0.30), smoothstep(0.68, 0.95, c) * 0.55)
-	var g_forest: Color = Color(0.20, 0.52, 0.20).lerp(Color(0.30, 0.64, 0.22), c)
+	var g_plain: Color = Color(0.36, 0.64, 0.20).lerp(Color(0.50, 0.76, 0.24), c)
+	g_plain = g_plain.lerp(Color(0.70, 0.68, 0.30), smoothstep(0.72, 0.98, c) * 0.35)
+	var g_forest: Color = Color(0.20, 0.44, 0.19).lerp(Color(0.28, 0.54, 0.21), c)
 	var sand: Color = Color(0.97, 0.80, 0.48).lerp(Color(0.90, 0.64, 0.36), c)
 	var rock: Color = Color(0.52, 0.50, 0.55).lerp(Color(0.66, 0.62, 0.64), c)
 	var m_low: Color = g_forest.lerp(rock, smoothstep(28.0, 48.0, h))
@@ -129,8 +129,8 @@ func color(x: float, z: float, h: float, ny: float) -> Color:
 	# dirt roads (sandy and pale in the desert)
 	var pa: float = road(x, z, h)
 	if pa > 0.0:
-		var dirt: Color = Color(0.80, 0.60, 0.34).lerp(Color(0.97, 0.84, 0.58), w.z)
-		dirt = dirt.lerp(Color(0.70, 0.52, 0.30), c * 0.5)
+		var dirt: Color = Color(0.66, 0.54, 0.38).lerp(Color(0.93, 0.80, 0.58), w.z)
+		dirt = dirt.lerp(Color(0.58, 0.46, 0.32), c * 0.4)
 		col = col.lerp(dirt, pa * 0.92)
 		grass_amt *= (1.0 - pa)
 	# beaches and lake shores
