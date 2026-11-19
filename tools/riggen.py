@@ -114,6 +114,31 @@ col = np.frombuffer(b, np.uint8, nv * 3, o).reshape(-1, 3).astype(np.float32) / 
 o += nv * 3
 tris = np.frombuffer(b, np.uint32, ni, o).reshape(-1, 3).astype(np.int64)
 sc = MAN_H / pos[:, 1].max()
+# --- clean the noisy atlas colours: neighbour smoothing, then a small palette (flat anime look)
+lin = np.power(col.astype(np.float64), 2.2)
+nb_i = np.concatenate([tris[:, 0], tris[:, 1], tris[:, 2], tris[:, 1], tris[:, 2], tris[:, 0]])
+nb_j = np.concatenate([tris[:, 1], tris[:, 2], tris[:, 0], tris[:, 0], tris[:, 1], tris[:, 2]])
+for _ in range(6):
+    acc_c = np.zeros_like(lin)
+    cnt = np.zeros(len(lin))
+    np.add.at(acc_c, nb_i, lin[nb_j])
+    np.add.at(cnt, nb_i, 1.0)
+    lin = 0.35 * lin + 0.65 * (acc_c / np.maximum(cnt, 1)[:, None])
+K = 9
+rng = np.random.default_rng(3)
+cen = lin[rng.choice(len(lin), K, replace=False)]
+for _ in range(25):
+    lab = np.argmin(((lin[:, None] - cen[None]) ** 2).sum(-1), axis=1)
+    for k in range(K):
+        if (lab == k).any():
+            cen[k] = lin[lab == k].mean(0)
+lin = cen[lab]
+# lift very dark colours a little so the outfit still reads
+lum = lin @ np.array([0.3, 0.59, 0.11])
+lin = lin * (1.0 + 0.9 * np.clip(0.06 - lum, 0, 1) / 0.06)[:, None] + 0.01
+col = np.power(np.clip(lin, 0, 1), 1 / 2.2).astype(np.float32)
+print("palette", np.round(np.power(cen, 1 / 2.2) * 255).astype(int).tolist())
+
 pos = pos * sc
 print("iko verts", nv, "tris", len(tris), "scale", round(sc, 4))
 

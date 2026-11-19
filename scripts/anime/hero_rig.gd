@@ -16,7 +16,7 @@ const OUTFIT := Color(0.97, 0.97, 1.0)
 
 # game state -> clip names (change here when other clips are added to the GLB)
 const CLIP_IDLE := "Idle_No"
-const CLIP_RUN := "Walk_Carry"
+const CLIP_RUN := "__run"      # procedural (no run clip in UAL2)
 const CLIP_JUMP := "NinjaJump_Start"
 const CLIP_AIR := "NinjaJump_Idle"
 const CLIP_GLIDE := "NinjaJump_Idle"
@@ -43,6 +43,8 @@ var _hit_t: float = 9.0
 var _slash_t: float = 9.0
 var _air_t: float = 0.0
 var _cur: String = ""
+var _phase: float = 0.0
+var _bi: Dictionary = {}
 var _pivot: Node3D
 var _model: Node3D
 var _skel: Skeleton3D
@@ -126,7 +128,7 @@ func _build() -> bool:
 	_skel = sk[0] as Skeleton3D
 	if _skel == null or _skel.find_bone("hand_r") < 0:
 		return _fail("no hand_r bone")
-	if not _ap.has_animation(CLIP_IDLE) or not _ap.has_animation(CLIP_RUN):
+	if not _ap.has_animation(CLIP_IDLE):
 		return _fail("clips missing: " + str(_ap.get_animation_list()))
 	_mat = ShaderMaterial.new()
 	_mat.shader = load(SH_BODY) as Shader
@@ -180,6 +182,8 @@ func _build() -> bool:
 	_slash.position = Vector3(0.0, 1.05, 0.95)
 	_slash.visible = false
 	add_child(_slash)
+	for bn: String in ["pelvis", "spine_01", "spine_02", "spine_03", "neck_01", "Head", "clavicle_l", "clavicle_r", "upperarm_l", "upperarm_r", "lowerarm_l", "lowerarm_r", "thigh_l", "thigh_r", "calf_l", "calf_r", "foot_l", "foot_r"]:
+		_bi[bn] = _skel.find_bone(bn)
 	_play(CLIP_IDLE, 0.0, 1.0)
 	return true
 
@@ -215,6 +219,12 @@ func flash() -> void:
 		_play(CLIP_HIT, 0.05, 1.5, true)
 
 func _play(clip: String, blend: float, speed: float, restart: bool = false) -> void:
+	if clip == CLIP_RUN:
+		if _cur != CLIP_RUN:
+			_ap.stop()
+			_skel.reset_bone_poses()
+			_cur = CLIP_RUN
+		return
 	if _ap == null or not _ap.has_animation(clip):
 		return
 	if _cur == clip and not restart:
@@ -225,6 +235,62 @@ func _play(clip: String, blend: float, speed: float, restart: bool = false) -> v
 
 func _ease(cur: float, target: float, k: float, delta: float) -> float:
 	return lerpf(cur, target, 1.0 - exp(-k * delta))
+
+# ------------------------------------------------------------ procedural run
+# Every bone is given the total rotation it should have in skeleton space (about the world X axis for the
+# swing, about Z to bring the T-pose arms down); the local pose is derived from the bone's rest transform.
+func _bone(bn: String, total: Basis, parent_total: Basis) -> void:
+	var i: int = int(_bi.get(bn, -1))
+	if i < 0:
+		return
+	var p: int = _skel.get_bone_parent(i)
+	var gp: Basis = Basis.IDENTITY
+	if p >= 0:
+		gp = _skel.get_bone_global_rest(p).basis
+	var gc: Basis = _skel.get_bone_global_rest(i).basis
+	var loc: Basis = (parent_total * gp).inverse() * total * gc
+	_skel.set_bone_pose_rotation(i, loc.orthonormalized().get_rotation_quaternion())
+
+func _rx(a: float) -> Basis:
+	return Basis(Vector3.RIGHT, a)
+
+func _run_pose(delta: float) -> void:
+	var sp: float = clampf(run, 0.0, 1.2)
+	_phase += delta * (9.0 + 5.0 * sp)
+	var amp: float = 0.62 + 0.30 * sp
+	var lean: float = 0.10 + 0.10 * sp
+	var ph: float = _phase
+	var id: Basis = Basis.IDENTITY
+	var a1: Basis = _rx(lean / 3.0)
+	var a2: Basis = _rx(2.0 * lean / 3.0)
+	var a3: Basis = _rx(lean)
+	_bone("pelvis", id, id)
+	_bone("spine_01", a1, id)
+	_bone("spine_02", a2, a1)
+	_bone("spine_03", a3, a2)
+	_bone("neck_01", a3, a3)
+	_bone("Head", id, a3)
+	_bone("clavicle_l", a3, a3)
+	_bone("clavicle_r", a3, a3)
+	var down: float = deg_to_rad(72.0)
+	for side: int in [0, 1]:
+		var sg: float = 1.0 if side == 0 else -1.0       # +1 left (x+), -1 right
+		var s: String = "l" if side == 0 else "r"
+		var ph_s: float = ph + (0.0 if side == 0 else PI)
+		var th: float = -amp * sin(ph_s)
+		var knee: float = 0.15 + 0.95 * maxf(0.0, cos(ph_s))
+		var t_tot: Basis = _rx(th)
+		_bone("thigh_" + s, t_tot, id)
+		var c_tot: Basis = _rx(th + knee)
+		_bone("calf_" + s, c_tot, t_tot)
+		_bone("foot_" + s, _rx(0.0), c_tot)
+		var sw: float = 0.55 * amp * sin(ph_s)           # arm swings opposite to the same-side leg
+		var elbow: float = -(0.85 + 0.35 * sp) - 0.25 * maxf(0.0, -sin(ph_s))
+		var rz: Basis = Basis(Vector3.BACK, -sg * down)
+		var u_tot: Basis = _rx(lean + sw) * rz
+		_bone("upperarm_" + s, u_tot, a3)
+		_bone("lowerarm_" + s, _rx(lean + sw + elbow) * rz, u_tot)
+	_model.position.y = -HIP_Y + absf(sin(ph)) * 0.035 * MODEL_SCALE
 
 # ------------------------------------------------------------ state machine
 func _process(delta: float) -> void:
@@ -256,10 +322,13 @@ func _process(delta: float) -> void:
 			_play(CLIP_AIR, 0.25, 1.0)
 	elif run > 0.12:
 		_play(CLIP_RUN, 0.15, 1.0)
-		_ap.speed_scale = 0.85 + 1.0 * clampf(run, 0.0, 1.2)
-		lean = 0.08 * clampf(run, 0.0, 1.0)
+		lean = 0.0
 	else:
 		_play(CLIP_IDLE, 0.25, 1.0)
+	if _cur == CLIP_RUN and not (casting or attacking or hurt) and not airborne and not gliding:
+		_run_pose(delta)
+	else:
+		_model.position.y = -HIP_Y
 	_pivot.rotation.x = _ease(_pivot.rotation.x, lean, 10.0, delta)
 	_glider.visible = gliding
 	_sword.visible = attacking or casting or _atk_t < 1.4

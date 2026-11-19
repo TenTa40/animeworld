@@ -2,7 +2,7 @@ shader_type spatial;
 render_mode cull_disabled;
 
 // iko, skinned version: colours come from the vertex colours baked by tools/herogen.py (sRGB-encoded).
-uniform float bright = 1.55;
+uniform float bright = 1.2;
 uniform float lift = 0.045;
 uniform float col_gamma = 2.2;
 uniform float rim_strength = 0.30;

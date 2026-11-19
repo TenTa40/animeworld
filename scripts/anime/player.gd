@@ -25,8 +25,8 @@ var _hero = null
 var _rig: Node3D
 var _cam: Camera3D
 var _shadow: MeshInstance3D
-var _cam_dist: float = 4.6
-var _cam_dist_target: float = 4.6
+var _cam_dist: float = 3.2
+var _cam_dist_target: float = 3.2
 var _fov_target: float = 46.0
 var _face_y: float = 0.0
 var _inv: float = 0.0
@@ -117,7 +117,7 @@ func _ready() -> void:
 
 func start_play() -> void:
 	title_mode = false
-	_cam_dist_target = 5.6
+	_cam_dist_target = 3.7
 	_fov_target = 70.0
 	pitch = -0.30
 
@@ -256,7 +256,7 @@ func _physics_process(delta: float) -> void:
 		var kk: float = 620.0 / flat.length()
 		global_position.x *= kk
 		global_position.z *= kk
-	_cam_dist_target = 5.6 + (1.3 if _gliding else 0.0)
+	_cam_dist_target = 3.7 + (1.0 if _gliding else 0.0)
 	_fov_target = 70.0 + (9.0 if _gliding else 0.0) + (4.0 if _dash_t > 0.0 else 0.0)
 	_update_camera(delta)
 
@@ -274,7 +274,7 @@ func _title_step(delta: float) -> void:
 	_hero.run = 0.0
 	_hero.airborne = false
 	_hero.gliding = false
-	_cam_dist_target = 4.6
+	_cam_dist_target = 3.2
 	_fov_target = 46.0
 	_update_camera(delta)
 

@@ -865,12 +865,12 @@ func _governor(delta: float) -> void:
 		return
 	_gov_t += delta
 	_gov_frames += 1
-	if _gov_t < 3.0:
+	if _gov_t < 2.5:
 		return
 	var fps: float = float(_gov_frames) / _gov_t
 	_gov_t = 0.0
 	_gov_frames = 0
-	if fps < 26.0:
+	if fps < 40.0:
 		_gov_low += 1
 	else:
 		_gov_low = 0
@@ -905,8 +905,8 @@ func _apply_settings() -> void:
 	_env.adjustment_enabled = SET.quality >= 2
 	_env.adjustment_saturation = 1.15
 	_env.adjustment_contrast = 1.05
-	var gq: float = maxf(1.0 - 0.09 * float(_gov_level), 0.5)
-	var gd: float = maxf(1.0 - 0.10 * float(_gov_level), 0.45)
+	var gq: float = maxf(1.0 - 0.11 * float(_gov_level), 0.4)
+	var gd: float = maxf(1.0 - 0.12 * float(_gov_level), 0.35)
 	if nature != null:
 		if SET.quality == 0:
 			nature.Q = 0.6 * gq
