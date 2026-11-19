@@ -79,7 +79,13 @@ func _show_hero_msg() -> void:
 	add_child(cl)
 	get_tree().create_timer(12.0).timeout.connect(cl.queue_free)
 
+func _add_logview() -> void:
+	var lv: CanvasLayer = (load("res://scripts/anime/logview.gd") as GDScript).new() as CanvasLayer
+	lv.set("info", _hero_msg)
+	add_child(lv)
+
 func _ready() -> void:
+	call_deferred("_add_logview")
 	add_to_group("player")
 	collision_layer = 2
 	collision_mask = 9
