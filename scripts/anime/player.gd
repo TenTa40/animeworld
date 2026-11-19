@@ -155,10 +155,11 @@ func _physics_process(delta: float) -> void:
 	if moving:
 		_face_y = atan2(dir.x, dir.z)
 
-	var on_floor: bool = is_on_floor()
 	var gh: float = 0.0
 	if world != null:
 		gh = float(world.height(global_position.x, global_position.z))
+	# the terrain collider streams in late: also count the height-field as floor so we never sink
+	var on_floor: bool = is_on_floor() or (world != null and gh > -0.9 and global_position.y <= gh + 0.06 and velocity.y <= 0.1)
 	_swim = gh < -0.9 and global_position.y < 0.3
 	if on_floor:
 		_air_t = 0.0
@@ -225,6 +226,12 @@ func _physics_process(delta: float) -> void:
 	elif velocity.y < 0.0:
 		velocity.y = 0.0
 	move_and_slide()
+	if world != null:
+		var gh2: float = float(world.height(global_position.x, global_position.z))
+		if gh2 > -0.9 and global_position.y < gh2 - 0.02:
+			global_position.y = gh2
+			if velocity.y < 0.0:
+				velocity.y = 0.0
 
 	# visuals
 	_hero.rotation.y = lerp_angle(_hero.rotation.y, _face_y, minf(1.0, 14.0 * delta))
