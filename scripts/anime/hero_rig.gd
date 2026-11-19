@@ -15,17 +15,17 @@ const GOLD := Color(1.0, 0.82, 0.35)
 const OUTFIT := Color(0.97, 0.97, 1.0)
 
 # game state -> clip names (change here when other clips are added to the GLB)
-const CLIP_IDLE := "Idle_No_Loop"
-const CLIP_RUN := "Walk_Carry_Loop"
+const CLIP_IDLE := "Idle_No"
+const CLIP_RUN := "Walk_Carry"
 const CLIP_JUMP := "NinjaJump_Start"
-const CLIP_AIR := "NinjaJump_Idle_Loop"
-const CLIP_GLIDE := "NinjaJump_Idle_Loop"
+const CLIP_AIR := "NinjaJump_Idle"
+const CLIP_GLIDE := "NinjaJump_Idle"
 const CLIP_HIT := "Hit_Knockback"
 const CLIP_CAST := "Sword_Dash"
 const CLIPS_ATK: Array = ["Sword_Regular_A", "Sword_Regular_B", "Sword_Regular_C"]
 const ATK_SPEED: Array = [1.25, 1.3, 2.1]
 const ATK_TIME: Array = [0.36, 0.42, 0.62]
-const LOOPS: Array = ["Idle_No_Loop", "Walk_Carry_Loop", "NinjaJump_Idle_Loop", "Idle_FoldArms_Loop", "Slide_Loop", "Zombie_Walk_Fwd_Loop", "Idle_Shield_Loop"]
+const LOOPS: Array = ["Idle_No", "Walk_Carry", "NinjaJump_Idle", "Idle_FoldArms", "Slide", "Zombie_Walk_Fwd", "Idle_Shield"]
 # blade direction in the hand_r bone frame (measured from the UAL2 sword clips)
 const GRIP_POS := Vector3(0.0, 0.08, 0.0)
 
