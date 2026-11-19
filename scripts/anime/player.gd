@@ -49,14 +49,15 @@ var _swim_fx: float = 0.0
 
 # iko's own model when its data file is there and loads; otherwise the procedural hero
 func _make_hero() -> Node3D:
-	if ResourceLoader.exists("res://scripts/anime/hero_iko.gd"):
-		var sc: GDScript = load("res://scripts/anime/hero_iko.gd") as GDScript
-		if sc != null:
-			var h: Node3D = sc.new() as Node3D
-			if h != null:
-				if bool(h.get("loaded")):
-					return h
-				h.free()
+	for path: String in ["res://scripts/anime/hero_rig.gd", "res://scripts/anime/hero_iko.gd"]:
+		if ResourceLoader.exists(path):
+			var sc: GDScript = load(path) as GDScript
+			if sc != null:
+				var h: Node3D = sc.new() as Node3D
+				if h != null:
+					if bool(h.get("loaded")):
+						return h
+					h.free()
 	return HERO.new()
 
 func _ready() -> void:
