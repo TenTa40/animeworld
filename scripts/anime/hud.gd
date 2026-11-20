@@ -2,6 +2,7 @@ extends CanvasLayer
 # Touch HUD: joystick, look-drag, action buttons with cooldown rings, minimap, HP bar, quest text.
 
 const FX = preload("res://scripts/anime/fx.gd")
+const MAPVIEW = preload("res://scripts/anime/mapview.gd")
 signal pause_pressed
 
 const JOY_R := 90.0
@@ -44,6 +45,8 @@ var _sb_fill: StyleBoxFlat
 var debug_txt: String = ""
 var _near_t: float = 0.0
 var _near_txt: String = ""
+var _map = null
+var _place: String = ""
 
 class Pad extends Control:
 	var h = null
@@ -85,6 +88,9 @@ func _ready() -> void:
 	_toast.offset_top = 110
 	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_toast.modulate.a = 0.0
+	_map = MAPVIEW.new()
+	add_child(_map)
+	_map.setup(get_parent())
 	_refresh()
 
 func _label(sz: int, preset: int) -> Label:
@@ -103,7 +109,7 @@ func fa(n: int) -> String:
 	return FX.fa(n)
 
 func _refresh() -> void:
-	_info.text = "کریستال‌ها: %s / %s    ·    شکست‌خورده‌ها: %s" % [fa(cells), fa(cells_total), fa(kills)]
+	_info.text = _place
 
 func set_hp(v: float) -> void:
 	hp = v
@@ -111,7 +117,15 @@ func set_hp(v: float) -> void:
 func set_counts(c: int, k: int) -> void:
 	cells = c
 	kills = k
+
+func set_place(t: String) -> void:
+	_place = t
 	_refresh()
+
+func open_map() -> void:
+	if _map != null:
+		reset_input()
+		_map.open_map()
 
 func flash() -> void:
 	_flash.color.a = 0.35
@@ -247,6 +261,10 @@ func _input(event: InputEvent) -> void:
 		var p: Vector2 = st.position
 		if st.pressed:
 			var hit: String = _hit_button(p)
+			var mrr: float = 84.0 * _u()
+			if hit == "" and p.distance_to(Vector2(24.0 * _u() + mrr, 24.0 * _u() + mrr)) < mrr + 8.0 * _u():
+				open_map()
+				return
 			if hit != "":
 				_btn_touch[st.index] = hit
 				_press(hit)
@@ -353,21 +371,7 @@ func _map_offset(wp: Vector3, ppos: Vector3, yaw: float, k: float, mr: float, cl
 	return v
 
 func _update_near() -> void:
-	if _player == null or not is_instance_valid(_player):
-		return
-	var best: float = INF
-	for n in get_tree().get_nodes_in_group("crystal"):
-		var d: float = (n as Node3D).global_position.distance_to(_player.global_position)
-		if d < best:
-			best = d
-	if is_inf(best):
-		var bc: Node = get_tree().get_first_node_in_group("beacon")
-		if bc != null:
-			_near_txt = "دروازه: " + fa(int((bc as Node3D).global_position.distance_to(_player.global_position))) + " متر"
-		else:
-			_near_txt = ""
-	else:
-		_near_txt = "کریستال: " + fa(int(best)) + " متر"
+	_near_txt = "نقشه‌ی بزرگ: روی دایره بزن"
 
 func _paint_minimap(c: Control, u: float) -> void:
 	var mr: float = 84.0 * u
@@ -392,16 +396,6 @@ func _paint_minimap(c: Control, u: float) -> void:
 		var o1: Vector2 = _map_offset(en.global_position, ppos, yaw, k, mr, false)
 		if not is_inf(o1.x):
 			c.draw_circle(mc + o1, 4.5 * u, Color(1.0, 0.3, 0.35, 0.95))
-	for n in get_tree().get_nodes_in_group("crystal"):
-		var o2: Vector2 = _map_offset((n as Node3D).global_position, ppos, yaw, k, mr, true)
-		var q: Vector2 = mc + o2
-		var s: float = 6.5 * u
-		c.draw_colored_polygon(PackedVector2Array([q + Vector2(0, -s), q + Vector2(s * 0.7, 0), q + Vector2(0, s), q + Vector2(-s * 0.7, 0)]), Color(0.45, 0.9, 1.0, 1.0))
-	for n in get_tree().get_nodes_in_group("beacon"):
-		var o3: Vector2 = _map_offset((n as Node3D).global_position, ppos, yaw, k, mr, true)
-		var g: Vector2 = mc + o3
-		c.draw_circle(g, 9.0 * u, Color(1.0, 0.85, 0.35, 0.9))
-		c.draw_arc(g, 12.0 * u, 0.0, TAU, 20, Color(1, 1, 1, 0.9), 2.5 * u)
 	# player arrow
 	var a: float = 8.0 * u
 	c.draw_colored_polygon(PackedVector2Array([mc + Vector2(0, -a * 1.3), mc + Vector2(a, a), mc + Vector2(0, a * 0.5), mc + Vector2(-a, a)]), Color(1, 1, 1, 1))

@@ -5,7 +5,8 @@ const TOON = preload("res://scripts/anime/toon.gd")
 const PLAYER = preload("res://scripts/anime/player.gd")
 const SLIME = preload("res://scripts/anime/slime.gd")
 const ZOMBIE = preload("res://scripts/anime/zombie.gd")
-const CRYSTAL = preload("res://scripts/anime/crystal.gd")
+const TOWN = preload("res://scripts/anime/town.gd")
+const NPCS = preload("res://scripts/anime/npcs.gd")
 const NATURE = preload("res://scripts/anime/nature.gd")
 const HUD = preload("res://scripts/anime/hud.gd")
 const MENU = preload("res://scripts/anime/menu.gd")
@@ -15,7 +16,6 @@ const SET = preload("res://scripts/anime/settings.gd")
 const TERRAIN = preload("res://scripts/anime/terrain.gd")
 const IMPOSTOR = preload("res://scripts/anime/impostor.gd")
 
-const CRYSTALS_TOTAL := 10
 const MAX_ENEMIES := 8
 const DAY_LEN := 320.0
 const GATE_Z := -9.0
@@ -57,7 +57,8 @@ var _stars_mat: ShaderMaterial
 var _petals: CPUParticles3D
 var _petal_night: bool = false
 var _fire_light: OmniLight3D
-var _beacon: Node3D = null
+var town = null
+var npcs = null
 var _kf: Array = []
 var _gov_level: int = 0
 var _gov_t: float = 0.0
@@ -112,7 +113,15 @@ func _boot() -> void:
 				break
 			nature.build_some(Vector3.ZERO, 14000)
 			await _step(0.52 + 0.24 * (1.0 - float(nrem) / float(ntot)), "کاشتن درخت و چمن...")
-	await _step(0.78, "اردوگاه، صدا و کریستال‌ها...")
+	await _step(0.74, "ساختن شهر قلعه...")
+	town = TOWN.new()
+	add_child(town)
+	town.setup(self)
+	npcs = NPCS.new()
+	add_child(npcs)
+	npcs.setup(self)
+	print("[iko] town: ", town.msg, " | ", npcs.msg)
+	await _step(0.78, "اردوگاه و صدا...")
 	_build_camp()
 	_build_petals()
 	audio = AUDIO.new()
@@ -122,7 +131,6 @@ func _boot() -> void:
 	hud = HUD.new()
 	add_child(hud)
 	hud.visible = false
-	hud.cells_total = CRYSTALS_TOTAL
 	hud.pause_pressed.connect(_on_pause)
 	await _step(0.84, "ساختن قهرمان...")
 	player = PLAYER.new()
@@ -138,7 +146,6 @@ func _boot() -> void:
 	menu.restart_pressed.connect(_on_restart)
 	menu.continue_pressed.connect(_on_continue)
 	menu.settings_changed.connect(_on_settings_changed)
-	_spawn_crystals()
 	await _step(0.90, "آماده‌سازی جلوه‌ها...")
 	_apply_settings()
 	_update_time()
@@ -158,13 +165,6 @@ func _warmup() -> void:
 	holder.process_mode = Node.PROCESS_MODE_DISABLED
 	add_child(holder)
 	var base: Vector3 = player.global_position
-	var c1 = CRYSTAL.new()
-	c1.position = base + Vector3(0.7, 0.3, 0.5)
-	holder.add_child(c1)
-	var c2 = CRYSTAL.new()
-	c2.kind = "heal"
-	c2.position = base + Vector3(-0.7, 0.3, 0.5)
-	holder.add_child(c2)
 	var sl = SLIME.new()
 	sl.position = base + Vector3(-1.0, 0.2, -0.6)
 	holder.add_child(sl)
@@ -204,14 +204,13 @@ func _process(delta: float) -> void:
 		if _enemy_t <= 0.0:
 			_enemy_t = 2.0
 			_enemy_tick()
-		if _beacon != null and player != null:
-			var d: Vector2 = Vector2(player.global_position.x - _beacon.global_position.x, player.global_position.z - _beacon.global_position.z)
-			if d.length() < 2.8:
-				_win()
 
 # ------------------------------------------------------------ terrain access (used by player, nature, enemies)
 func height(x: float, z: float) -> float:
 	return terrain.sample(x, z)
+
+func in_town(x: float, z: float, margin: float = 0.0) -> bool:
+	return terrain.gen.in_town(x, z, margin)
 
 func forest(x: float, z: float) -> float:
 	return terrain.gen.forest(x, z)
@@ -420,15 +419,17 @@ func _follow(delta: float) -> void:
 	if _fire_light != null:
 		var base: float = 0.7 + 1.1 * night
 		_fire_light.light_energy = base * (1.0 + 0.12 * sin(_t * 17.0) + 0.10 * sin(_t * 7.3))
-	if _beacon != null:
-		_beacon.rotation.y += delta * 0.6
 	_biome_t -= delta
 	if _biome_t <= 0.0:
 		_biome_t = 0.7
 		var w: Vector4 = biome_vec(pp.x, pp.z)
 		var nm: String = terrain.gen.biome_name(w, grove(pp.x, pp.z) * w.x)
+		if in_town(pp.x, pp.z, 6.0):
+			nm = "شهر قلعه‌ی ابر"
 		if nm != "" and nm != _biome_cur:
 			_biome_cur = nm
+			if hud != null:
+				hud.set_place(nm)
 			if state == "playing":
 				hud.toast("منطقه‌ی جدید: " + nm, 3.0)
 
@@ -637,17 +638,6 @@ func _biome_spot(biome: int, placed: Array) -> Vector3:
 			return p
 	return Vector3(40.0 + float(placed.size()) * 12.0, height(40.0, 0.0), 20.0)
 
-func _spawn_crystals() -> void:
-	var plan: Array = [0, 0, 1, 1, 2, 2, 3, 3, 4, 1]
-	var placed: Array = []
-	for b in plan:
-		var p: Vector3 = _biome_spot(int(b), placed)
-		placed.append(p)
-		var cr = CRYSTAL.new()
-		cr.position = p
-		actors.add_child(cr)
-		cr.collected.connect(_on_crystal)
-
 func _enemy_spot(pp: Vector3) -> Vector3:
 	for tries in range(30):
 		var a: float = _rng.randf() * TAU
@@ -655,6 +645,8 @@ func _enemy_spot(pp: Vector3) -> Vector3:
 		var x: float = pp.x + cos(a) * r
 		var z: float = pp.z + sin(a) * r
 		if Vector2(x, z).length() < 32.0:
+			continue
+		if in_town(x, z, 70.0):
 			continue
 		if not terrain.has_collision_at(x, z):
 			continue
@@ -712,79 +704,8 @@ func _enemy_tick() -> void:
 		_spawn_enemy_at(p)
 		alive += 1
 
-func _on_crystal() -> void:
-	collected += 1
-	hud.set_counts(collected, kills)
-	if collected >= CRYSTALS_TOTAL:
-		hud.toast("همه‌ی کریستال‌ها رو جمع کردی! برو سمت دروازه‌ی نورانی ✨", 7.0)
-		_spawn_beacon()
-	else:
-		hud.toast("کریستال پیدا شد!  " + FX.fa(collected) + " / " + FX.fa(CRYSTALS_TOTAL), 2.0)
-
 func _on_enemy_died() -> void:
 	kills += 1
-	hud.set_counts(collected, kills)
-
-func _spawn_beacon() -> void:
-	if _beacon != null:
-		return
-	var gh: float = height(0.0, GATE_Z)
-	_beacon = Node3D.new()
-	_beacon.position = Vector3(0.0, gh, GATE_Z)
-	_beacon.add_to_group("beacon")
-	add_child(_beacon)
-	var beam := MeshInstance3D.new()
-	var cm := CylinderMesh.new()
-	cm.top_radius = 1.2
-	cm.bottom_radius = 1.4
-	cm.height = 70.0
-	cm.radial_segments = 16
-	cm.rings = 1
-	cm.cap_top = false
-	cm.cap_bottom = false
-	beam.mesh = cm
-	var bm := ShaderMaterial.new()
-	bm.shader = load("res://shaders/anime/beam.gdshader") as Shader
-	bm.set_shader_parameter("height", 70.0)
-	beam.material_override = bm
-	beam.position = Vector3(0.0, 35.0, 0.0)
-	beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_beacon.add_child(beam)
-	var ring := MeshInstance3D.new()
-	var rq := QuadMesh.new()
-	rq.size = Vector2(7.0, 7.0)
-	var rm := StandardMaterial3D.new()
-	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	rm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	rm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	rm.cull_mode = BaseMaterial3D.CULL_DISABLED
-	rm.albedo_texture = FX.ring_tex()
-	rm.albedo_color = Color(1.0, 0.85, 0.4, 0.9)
-	rm.disable_fog = true
-	rq.material = rm
-	ring.mesh = rq
-	ring.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
-	ring.position = Vector3(0.0, 0.15, 0.0)
-	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_beacon.add_child(ring)
-	var sp := CPUParticles3D.new()
-	sp.amount = 30
-	sp.lifetime = 2.5
-	sp.mesh = FX.particle_mesh()
-	sp.direction = Vector3.UP
-	sp.spread = 8.0
-	sp.initial_velocity_min = 3.0
-	sp.initial_velocity_max = 6.0
-	sp.gravity = Vector3.ZERO
-	sp.scale_amount_min = 0.12
-	sp.scale_amount_max = 0.25
-	sp.color = Color(1.0, 0.9, 0.5, 0.9)
-	sp.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	sp.emission_sphere_radius = 1.0
-	sp.local_coords = false
-	sp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_beacon.add_child(sp)
-	FX.sfx(self, "pickup", 2.0, 0.8)
 
 # ------------------------------------------------------------ states
 func _on_start() -> void:
@@ -794,13 +715,12 @@ func _on_start() -> void:
 	hud.visible = true
 	hud.input_enabled = true
 	hud.reset_input()
-	hud.set_counts(collected, kills)
 	actors.process_mode = Node.PROCESS_MODE_INHERIT
 	terrain.budget_us = 3500
 	_enemy_tick()
 	tod = 0.33
 	_update_time()
-	hud.toast("iko، به جزیره خوش اومدی! ۱۰ کریستال توی چهار منطقه‌ی جزیره پنهونه؛ نقشه‌ی کوچیک جهتشون رو نشون می‌ده.", 7.0)
+	hud.toast("iko، به جزیره خوش اومدی! شهر قلعه‌ی ابر رو روی نقشه پیدا کن (روی نقشه‌ی کوچیک بزن).", 7.0)
 
 func _on_pause() -> void:
 	if state != "playing":
@@ -821,32 +741,10 @@ func _on_restart() -> void:
 	get_tree().reload_current_scene()
 
 func _on_continue() -> void:
-	if _beacon != null:
-		_beacon.queue_free()
-		_beacon = null
 	menu.hide_all()
 	state = "playing"
 	hud.input_enabled = true
 	actors.process_mode = Node.PROCESS_MODE_INHERIT
-
-func _win() -> void:
-	state = "won"
-	hud.input_enabled = false
-	hud.reset_input()
-	actors.process_mode = Node.PROCESS_MODE_DISABLED
-	FX.sfx(self, "victory", 0.0)
-	FX.burst(self, player.global_position + Vector3(0.0, 1.5, 0.0), Color(1.0, 0.85, 0.45), 60, 9.0, 0.28, 1.4, 4.0)
-	FX.burst(self, player.global_position + Vector3(0.0, 1.5, 0.0), Color(1.0, 0.55, 0.75), 50, 8.0, 0.25, 1.4, 4.0)
-	FX.vibrate(120)
-	var secs: int = int(game_time)
-	var mm: String = FX.fa(secs / 60)
-	var ss: String = FX.fa(secs % 60)
-	if secs % 60 < 10:
-		ss = FX.fa(0) + ss
-	var txt: String = "کریستال‌ها: %s / %s\nشکست‌خورده‌ها: %s\nزمان: %s:%s" % [FX.fa(collected), FX.fa(CRYSTALS_TOTAL), FX.fa(kills), mm, ss]
-	await get_tree().create_timer(1.6).timeout
-	if state == "won":
-		menu.show_victory(txt)
 
 # ------------------------------------------------------------ settings
 func _on_settings_changed() -> void:

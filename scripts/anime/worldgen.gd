@@ -79,7 +79,44 @@ func road(x: float, z: float, h: float) -> float:
 func autumn(x: float, z: float) -> float:
 	return smoothstep(0.54, 0.72, n_aut.get_noise_2d(x, z) * 0.5 + 0.5)
 
+# ---- castle town (terraced; the profile must match tools/towngen.py town_h)
+const TOWN_O := Vector2(110.0, -60.0)
+const TOWN_H0 := 6.0
+const TOWN_H1 := 10.5
+const TOWN_H2 := 17.0
+const TOWN_U0 := -74.0
+const TOWN_U1 := 84.0
+const TOWN_V := 36.0
+const TOWN_FALL := 55.0
+
+func town_h(u: float) -> float:
+	return TOWN_H0 + (TOWN_H1 - TOWN_H0) * smoothstep(-38.0, -26.0, u) + (TOWN_H2 - TOWN_H1) * smoothstep(22.0, 34.0, u)
+
+# distance outside the town rectangle (0 = inside)
+func town_dist(x: float, z: float) -> float:
+	var u: float = x - TOWN_O.x
+	var v: float = z - TOWN_O.y
+	var du: float = maxf(maxf(TOWN_U0 - u, u - TOWN_U1), 0.0)
+	var dv: float = maxf(absf(v) - TOWN_V, 0.0)
+	return sqrt(du * du + dv * dv)
+
+# 1 inside the town, fading to 0 over TOWN_FALL metres
+func town_k(x: float, z: float) -> float:
+	var d: float = town_dist(x, z)
+	if d >= TOWN_FALL:
+		return 0.0
+	return 1.0 - smoothstep(0.0, TOWN_FALL, d)
+
+func in_town(x: float, z: float, margin: float = 0.0) -> bool:
+	return town_dist(x, z) <= margin
+
 func height(x: float, z: float) -> float:
+	var h: float = _height_nat(x, z)
+	if town_dist(x, z) < TOWN_FALL:
+		h = lerpf(h, town_h(x - TOWN_O.x), town_k(x, z))
+	return h
+
+func _height_nat(x: float, z: float) -> float:
 	var w: Vector4 = masks(x, z)
 	var hills: float = n_hill.get_noise_2d(x, z)
 	var det: float = n_det.get_noise_2d(x, z)
@@ -142,7 +179,23 @@ func color(x: float, z: float, h: float, ny: float) -> Color:
 	col = col.lerp(Color(0.96, 0.97, 1.0), snow)
 	grass_amt *= (1.0 - snow)
 	# dirt roads (sandy and pale in the desert)
-	var pa: float = road(x, z, h)
+	var tk: float = 0.0
+	if town_dist(x, z) < 6.0:
+		tk = 1.0 - smoothstep(0.0, 6.0, town_dist(x, z))
+		var u: float = x - TOWN_O.x
+		var v: float = z - TOWN_O.y
+		# lawn everywhere, cobbles on the main street, plaza and keep courtyard
+		var lawn: Color = Color(0.42, 0.70, 0.26).lerp(Color(0.52, 0.78, 0.30), c)
+		col = col.lerp(lawn, tk)
+		grass_amt = lerpf(grass_amt, 1.0, tk)
+		var st: float = 1.0 - smoothstep(4.5, 6.5, absf(v))
+		var pl: float = (1.0 - smoothstep(14.0, 18.0, absf(u + 44.0))) * (1.0 - smoothstep(24.0, 28.0, absf(v)))
+		var cy: float = smoothstep(26.0, 29.0, u) * (1.0 - smoothstep(76.0, 79.0, u)) * (1.0 - smoothstep(22.0, 26.0, absf(v)))
+		var pv: float = maxf(maxf(st, pl), cy) * tk
+		var cob: Color = Color(0.66, 0.62, 0.56).lerp(Color(0.74, 0.70, 0.64), c)
+		col = col.lerp(cob, pv)
+		grass_amt *= (1.0 - pv)
+	var pa: float = road(x, z, h) * (1.0 - tk)
 	if pa > 0.0:
 		var dirt: Color = Color(0.66, 0.54, 0.38).lerp(Color(0.93, 0.80, 0.58), w.z)
 		dirt = dirt.lerp(Color(0.58, 0.46, 0.32), c * 0.4)

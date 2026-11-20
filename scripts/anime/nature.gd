@@ -37,6 +37,7 @@ var _cc: Vector2i = Vector2i(99999, 99999)
 var _lastq: float = -1.0
 var _incomplete: bool = true
 var _has_road: bool = false
+var _has_town: bool = false
 var _has_aut: bool = false
 var _foliage_shader: Shader = null
 var _grass_shader: Shader = null
@@ -110,6 +111,7 @@ func _make_cats() -> void:
 func setup(w) -> bool:
 	world = w
 	_has_road = world.has_method("road_at")
+	_has_town = world.has_method("in_town")
 	_has_aut = world.has_method("autumn_at")
 	var ok: bool = false
 	for t in ["CommonTree_5", "CommonTree_3", "Pine_5"]:
@@ -324,6 +326,8 @@ func _gen(ci: int, cx: int, cz: int) -> Array:
 		var vv: float = r.randf_range(0.88, 1.08)
 		var extra: float = r.randf()
 		if Vector2(x, z).length() < rmin:
+			continue
+		if _has_town and world.in_town(x, z, 4.0):
 			continue
 		var w: Vector4 = world.biome_vec(x, z)
 		var mult: float = w.x * bw0 + w.y * bw1 + w.z * bw2 + w.w * bw3
