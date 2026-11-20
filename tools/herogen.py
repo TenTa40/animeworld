@@ -54,6 +54,8 @@ nw = len(first)
 cnt = np.bincount(inv, minlength=nw).astype(np.float64)
 wpos = pos[first].astype(np.float64)
 wcol = np.stack([np.bincount(inv, weights=col[:, k], minlength=nw) for k in range(3)], axis=1) / cnt[:, None]
+lum0 = wcol @ np.array([0.30, 0.59, 0.11])
+wskin = ((lum0 > 105.0) & (wcol[:, 0] > wcol[:, 2] + 8.0) & (wcol[:, 0] > 140.0)).astype(np.float64)
 tri = inv[idx]
 ok = (tri[:, 0] != tri[:, 1]) & (tri[:, 1] != tri[:, 2]) & (tri[:, 0] != tri[:, 2])
 tri = tri[ok]
@@ -86,7 +88,11 @@ def decimate(cell, lam=0.15):
         wsum += np.bincount(cc, weights=w, minlength=K)
     ccount = np.bincount(cinv, minlength=K).astype(np.float64)
     pm = np.stack([np.bincount(cinv, weights=wpos[:, k], minlength=K) for k in range(3)], axis=1) / ccount[:, None]
-    cm = np.stack([np.bincount(cinv, weights=wcol[:, k], minlength=K) for k in range(3)], axis=1) / ccount[:, None]
+    sks = np.bincount(cinv, weights=wskin, minlength=K)
+    frac = sks / ccount
+    dk = np.stack([np.bincount(cinv, weights=wcol[:, k] * (1.0 - wskin), minlength=K) for k in range(3)], axis=1) / np.maximum(ccount - sks, 1.0)[:, None]
+    sk = np.stack([np.bincount(cinv, weights=wcol[:, k] * wskin, minlength=K) for k in range(3)], axis=1) / np.maximum(sks, 1.0)[:, None]
+    cm = (frac, dk, sk)
     eps = (lam * np.maximum(wsum, 1e-12))[:, None, None] * np.eye(3)[None]
     x = np.linalg.solve(A + eps, (-bvec + (eps @ pm[:, :, None])[:, :, 0])[:, :, None])[:, :, 0]
     lo = pm - 0.9 * cell
@@ -121,8 +127,24 @@ used = np.unique(t)
 remap = -np.ones(len(x), np.int64)
 remap[used] = np.arange(len(used))
 x = x[used]
-cm = cm[used]
+frac, dk, sk = cm
+frac = frac[used]
+dk = dk[used]
+sk = sk[used]
 t = remap[t]
+# majority classification, smoothed over the mesh, so skin and outfit never mix into mauve
+ei = np.concatenate([t[:, 0], t[:, 1], t[:, 2], t[:, 1], t[:, 2], t[:, 0]])
+ej = np.concatenate([t[:, 1], t[:, 2], t[:, 0], t[:, 0], t[:, 1], t[:, 2]])
+deg = np.maximum(np.bincount(ei, minlength=len(x)).astype(np.float64), 1.0)
+for _ in range(5):
+    frac = 0.5 * frac + 0.5 * np.bincount(ei, weights=frac[ej], minlength=len(x)) / deg
+isskin = frac > 0.5
+for _ in range(3):
+    dk = 0.5 * dk + 0.5 * np.stack([np.bincount(ei, weights=dk[ej, k], minlength=len(x)) for k in range(3)], axis=1) / deg[:, None]
+dk = np.where(dk.sum(1, keepdims=True) < 1.0, np.array([40.0, 42.0, 68.0]), dk)
+skin_col = sk[isskin].mean(0) if isskin.any() else np.array([237.0, 150.0, 160.0])
+cm = np.where(isskin[:, None], skin_col[None], dk)
+print("skin fraction", round(float(isskin.mean()), 3), "skin colour", np.round(skin_col))
 
 # scale and put the feet on y = 0, centred in x / z
 mn = x.min(0)

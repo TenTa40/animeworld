@@ -34,6 +34,8 @@ var _atk_cd: float = 0.0
 var _combo: int = 0
 var _combo_t: float = 0.0
 var _hit_t: float = -1.0
+var _coyote: float = 0.0
+var _jump_buf: float = 0.0
 var _lunge_t: float = 0.0
 var _dash_t: float = 0.0
 var _dash_cd: float = 0.0
@@ -90,7 +92,7 @@ func _ready() -> void:
 	collision_layer = 2
 	collision_mask = 9
 	floor_snap_length = 0.7
-	floor_max_angle = deg_to_rad(60.0)
+	floor_max_angle = deg_to_rad(58.0)
 	var cs := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
 	cap.radius = 0.35
@@ -167,6 +169,11 @@ func _physics_process(delta: float) -> void:
 	else:
 		_air_t += delta
 
+	if on_floor:
+		_coyote = 0.12
+	else:
+		_coyote = maxf(_coyote - delta, 0.0)
+	_jump_buf = maxf(_jump_buf - delta, 0.0)
 	# actions
 	if hud.take_dash() and _dash_cd <= 0.0:
 		_start_dash(dir if moving else Vector3(sin(_face_y), 0.0, cos(_face_y)))
@@ -177,14 +184,20 @@ func _physics_process(delta: float) -> void:
 	if hud.take_attack() and _atk_cd <= 0.0 and _dash_t <= 0.0:
 		_attack(dir if moving else Vector3.ZERO)
 	if hud.take_jump():
+		_jump_buf = 0.12
+	if _jump_buf > 0.0:
 		if _swim:
+			_jump_buf = 0.0
 			velocity.y = 5.0
 			FX.sfx(self, "jump", -8.0, 0.8)
-		elif on_floor:
+		elif on_floor or _coyote > 0.0:
+			_jump_buf = 0.0
+			_coyote = 0.0
 			velocity.y = JUMP
 			_jumps = 1
 			FX.sfx(self, "jump", -4.0)
-		elif _jumps < 2:
+		elif _jumps < 2 and _air_t > 0.15:
+			_jump_buf = 0.0
 			velocity.y = JUMP * 0.85
 			_jumps = 2
 			FX.sfx(self, "jump", -4.0, 1.25)
@@ -213,8 +226,21 @@ func _physics_process(delta: float) -> void:
 			var gd: Vector3 = dir if moving else cam_fwd
 			_face_y = atan2(gd.x, gd.z)
 			tgt = gd * 10.0
-		velocity.x = move_toward(velocity.x, tgt.x, 45.0 * delta)
-		velocity.z = move_toward(velocity.z, tgt.z, 45.0 * delta)
+		if on_floor and not _swim and _gliding == false:
+			var fn: Vector3 = get_floor_normal() if is_on_floor() else Vector3.UP
+			var fh: Vector3 = Vector3(fn.x, 0.0, fn.z)
+			if fh.length() > 0.01:
+				var up_k: float = dir.dot(fh.normalized()) * fh.length()      # >0 downhill, <0 uphill
+				tgt *= clampf(1.0 + 0.55 * up_k, 0.7, 1.15)
+				var steep: float = smoothstep(0.22, 0.45, 1.0 - fn.y)         # very steep ground: slide down
+				tgt += fh.normalized() * steep * 9.0
+		var acc: float = 42.0
+		if tgt.length() < 0.2:
+			acc = 30.0
+		if not on_floor and not _swim:
+			acc = 16.0
+		velocity.x = move_toward(velocity.x, tgt.x, acc * delta)
+		velocity.z = move_toward(velocity.z, tgt.z, acc * delta)
 
 	# vertical
 	if _swim:
@@ -237,7 +263,8 @@ func _physics_process(delta: float) -> void:
 	_hero.rotation.y = lerp_angle(_hero.rotation.y, _face_y, minf(1.0, 14.0 * delta))
 	var hs: float = Vector2(velocity.x, velocity.z).length() / SPEED
 	_hero.run = clampf(hs, 0.0, 1.2) if on_floor else clampf(hs, 0.0, 1.0)
-	_hero.airborne = (not is_on_floor()) and not _swim
+	var grounded: bool = is_on_floor() or (world != null and gh > -0.9 and global_position.y <= gh + 0.12 and velocity.y <= 0.5)
+	_hero.airborne = (not grounded) and not _swim
 	_hero.gliding = _gliding
 	if on_floor and hs > 0.4:
 		_step_t -= delta

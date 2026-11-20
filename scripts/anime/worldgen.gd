@@ -15,6 +15,8 @@ var n_forest := FastNoiseLite.new()
 var n_path := FastNoiseLite.new()
 var n_gate := FastNoiseLite.new()
 var n_aut := FastNoiseLite.new()
+var n_mesa := FastNoiseLite.new()
+var n_river := FastNoiseLite.new()
 var lakes: Array = []
 
 # dirt roads: the zero line of a smooth noise field makes long winding paths (width in noise units)
@@ -32,6 +34,8 @@ func _init() -> void:
 	_setup(n_path, 0.0052, 2, 61)
 	_setup(n_gate, 0.0028, 1, 67)
 	_setup(n_aut, 0.0065, 2, 73)
+	_setup(n_mesa, 0.0034, 2, 83)
+	_setup(n_river, 0.0042, 2, 89)
 	# x, z, radius, depth
 	lakes = [Vector4(-250.0, 48.0, 72.0, 8.0), Vector4(84.0, 282.0, 54.0, 7.0), Vector4(306.0, 12.0, 34.0, 5.0), Vector4(-84.0, -150.0, 50.0, 7.0)]
 
@@ -79,13 +83,24 @@ func height(x: float, z: float) -> float:
 	var w: Vector4 = masks(x, z)
 	var hills: float = n_hill.get_noise_2d(x, z)
 	var det: float = n_det.get_noise_2d(x, z)
-	var h: float = w.x * (4.0 + hills * 4.0 + det * 0.8)
-	h += w.y * (7.0 + hills * 12.0 + det * 1.5)
+	var h: float = w.x * (4.0 + hills * 8.0 + det * 0.8)
+	h += w.y * (9.0 + hills * 13.0 + det * 1.5)
 	if w.z > 0.01:
-		h += w.z * (5.0 + n_dune.get_noise_2d(x, z * 2.0) * 6.0 + hills * 3.0)
+		h += w.z * (6.0 + n_dune.get_noise_2d(x, z * 2.0) * 7.0 + hills * 5.0)
 	if w.w > 0.01:
 		var ridge: float = 1.0 - absf(n_ridge.get_noise_2d(x, z))
 		h += w.w * (16.0 + hills * 10.0 + pow(ridge, 2.2) * 72.0 + det * 2.0)
+	# plateaus / mesas with steep rims (Genshin-like tiers) on the lowlands
+	var big: float = n_mesa.get_noise_2d(x, z)
+	var tier: float = smoothstep(0.16, 0.26, big) * 13.0 + smoothstep(0.40, 0.50, big) * 9.0
+	h += tier * (w.x + w.y * 0.8 + w.z * 0.5)
+	# river valleys: deep winding canyons with a water-filled bottom
+	var rv: float = absf(n_river.get_noise_2d(x + 700.0, z - 300.0))
+	var d_sp: float = Vector2(x, z).length()
+	var rmask: float = (1.0 - smoothstep(0.35, 0.65, w.w)) * smoothstep(34.0, 80.0, d_sp)
+	var band: float = (1.0 - smoothstep(0.035, 0.17, rv)) * rmask
+	if band > 0.0:
+		h = lerpf(h, -3.2, band)
 	# spawn plateau
 	var d0: float = Vector2(x, z).length()
 	h = lerpf(h, 2.6, 1.0 - smoothstep(6.0, 22.0, d0))

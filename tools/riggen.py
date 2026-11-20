@@ -116,15 +116,7 @@ tris = np.frombuffer(b, np.uint32, ni, o).reshape(-1, 3).astype(np.int64)
 sc = MAN_H / pos[:, 1].max()
 # --- clean the noisy atlas colours: neighbour smoothing, then a small palette (flat anime look)
 lin = np.power(col.astype(np.float64), 2.2)
-nb_i = np.concatenate([tris[:, 0], tris[:, 1], tris[:, 2], tris[:, 1], tris[:, 2], tris[:, 0]])
-nb_j = np.concatenate([tris[:, 1], tris[:, 2], tris[:, 0], tris[:, 0], tris[:, 1], tris[:, 2]])
-for _ in range(6):
-    acc_c = np.zeros_like(lin)
-    cnt = np.zeros(len(lin))
-    np.add.at(acc_c, nb_i, lin[nb_j])
-    np.add.at(cnt, nb_i, 1.0)
-    lin = 0.35 * lin + 0.65 * (acc_c / np.maximum(cnt, 1)[:, None])
-K = 9
+K = 6
 rng = np.random.default_rng(3)
 cen = lin[rng.choice(len(lin), K, replace=False)]
 for _ in range(25):
@@ -225,6 +217,7 @@ for k, name in enumerate(sj):
     nm = jname[name]
     if nm.startswith(("thigh", "calf", "foot", "ball", "upperarm", "lowerarm", "hand")):
         W[:, k] *= (1.0 - 0.85 * far)
+flex = np.clip(far * (1.45 - pos[:, 1]) / 0.95, 0.0, 1.0)   # cloth that may swing (coat tails)
 W[:, pel] += 0.5 * far
 W[:, sp1] += 0.2 * far
 W /= W.sum(1, keepdims=True)
@@ -401,7 +394,7 @@ def add(arr, ctype, typ, target=None, mm=False):
 
 a_pos = add(pos.astype(np.float32), 5126, "VEC3", 34962, True)
 a_nrm = add(nrm.astype(np.float32), 5126, "VEC3", 34962)
-a_col = add(np.concatenate([col, np.ones((nv, 1), np.float32)], 1), 5126, "VEC4", 34962)
+a_col = add(np.concatenate([col, flex[:, None].astype(np.float32)], 1), 5126, "VEC4", 34962)
 a_jnt = add(Jt.astype(np.uint8), 5121, "VEC4", 34962)
 a_wgt = add(Wt.astype(np.float32), 5126, "VEC4", 34962)
 a_idx = add(tris.reshape(-1).astype(np.uint32).reshape(-1, 1), 5125, "SCALAR", 34963)

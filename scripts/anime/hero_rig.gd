@@ -51,6 +51,11 @@ var _model: Node3D
 var _skel: Skeleton3D
 var _ap: AnimationPlayer
 var _mat: ShaderMaterial
+var _omat: ShaderMaterial
+var _drag: Vector3 = Vector3.ZERO
+var _drag_v: Vector3 = Vector3.ZERO
+var _lp: Vector3 = Vector3.ZERO
+var _lp_ok: bool = false
 var _glider: Node3D
 var _sword: Node3D
 var _slash: MeshInstance3D
@@ -136,6 +141,7 @@ func _build() -> bool:
 	var om := ShaderMaterial.new()
 	om.shader = load(SH_OUT) as Shader
 	_mat.next_pass = om
+	_omat = om
 	for n in mis:
 		var mi: MeshInstance3D = n as MeshInstance3D
 		if mi == null:
@@ -296,9 +302,29 @@ func _run_pose(delta: float) -> void:
 	_model.position.y = -HIP_Y + absf(sin(ph)) * 0.035 * MODEL_SCALE
 
 # ------------------------------------------------------------ state machine
+func _cloth(delta: float) -> void:
+	var gp: Vector3 = global_position
+	var v: Vector3 = Vector3.ZERO
+	if _lp_ok and delta > 0.0001:
+		v = (gp - _lp) / delta
+	_lp = gp
+	_lp_ok = true
+	if v.length() > 40.0:
+		v = Vector3.ZERO
+	var lv: Vector3 = global_transform.basis.orthonormalized().inverse() * v
+	var tgt: Vector3 = Vector3(-lv.x * 0.02, -lv.y * 0.012, -lv.z * 0.032)
+	tgt = tgt.limit_length(0.30)
+	# damped spring so the coat overshoots a little and settles
+	_drag_v += ((tgt - _drag) * 140.0 - _drag_v * 9.0) * delta
+	_drag += _drag_v * delta
+	_drag = _drag.limit_length(0.4)
+	_mat.set_shader_parameter("drag", _drag)
+	_omat.set_shader_parameter("drag", _drag)
+
 func _process(delta: float) -> void:
 	if not loaded:
 		return
+	_cloth(delta)
 	_t += delta
 	_atk_t += delta
 	_cast_t += delta
@@ -318,11 +344,16 @@ func _process(delta: float) -> void:
 	elif gliding:
 		_play(CLIP_GLIDE, 0.2, 1.0)
 		lean = 0.95
-	elif airborne:
-		if _air_t < 0.35:
+	elif airborne and _air_t > 0.1:
+		if _clip_run == "Run" and run > 0.3 and _air_t > 0.2:
+			_play("Run", 0.15, 1.0)
+			_ap.speed_scale = 0.25
+		elif _air_t < 0.4:
 			_play(CLIP_JUMP, 0.1, 1.9)
 		else:
 			_play(CLIP_AIR, 0.25, 1.0)
+	elif airborne:
+		pass
 	elif run > 0.12:
 		_play(_clip_run, 0.15, 1.0)
 		if _clip_run == "Run":

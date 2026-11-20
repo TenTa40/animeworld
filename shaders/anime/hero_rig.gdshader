@@ -2,19 +2,28 @@ shader_type spatial;
 render_mode cull_disabled;
 
 // iko, skinned version: colours come from the vertex colours baked by tools/herogen.py (sRGB-encoded).
-uniform float bright = 1.2;
+uniform float bright = 1.35;
 uniform float lift = 0.045;
 uniform float col_gamma = 2.2;
 uniform float rim_strength = 0.30;
 uniform float shade_threshold = 0.12;
-uniform vec3 shadow_tint = vec3(0.34, 0.30, 0.50);
+uniform vec3 shadow_tint = vec3(0.46, 0.42, 0.56);
 uniform vec4 emission_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
 uniform float emission_energy = 0.0;
+
+uniform vec3 drag = vec3(0.0);       // model-space offset of loose cloth (set by hero_rig.gd, spring driven)
+uniform float flutter = 0.6;
 
 varying vec3 vcol;
 
 void vertex() {
 	vcol = COLOR.rgb;
+	float fl = COLOR.a;
+	float w = sin(TIME * 6.0 + VERTEX.y * 9.0 + VERTEX.x * 7.0);
+	float w2 = cos(TIME * 4.3 + VERTEX.y * 6.0 - VERTEX.x * 5.0);
+	VERTEX += drag * fl;
+	VERTEX.z -= fl * flutter * 0.022 * (0.5 + 0.5 * w);
+	VERTEX.x += fl * flutter * 0.016 * w2;
 }
 
 void fragment() {
